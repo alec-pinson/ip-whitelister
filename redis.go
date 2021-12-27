@@ -7,6 +7,7 @@ package main
 - Connection
 - func addIp
 - func deleteIp
+- func setIpExpiry
 - func getWhitelist
 - func keepAlive
 */
@@ -56,12 +57,15 @@ func (r RedisConfiguration) addIp(user string, ip string) {
 	}
 
 	// expire this key in x hours
-	_, err = r.Connection.Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
+	r.setIpExpiry(user)
+}
+
+// set ttl on ip
+func (r RedisConfiguration) setIpExpiry(user string) {
+	_, err := r.Connection.Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	w.List = r.getWhitelist()
 }
 
 // delete ip
@@ -70,8 +74,6 @@ func (r RedisConfiguration) deleteIp(user string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	w.List = r.getWhitelist()
 }
 
 // get whitelist
@@ -83,6 +85,9 @@ func (r RedisConfiguration) getWhitelist() map[string]string {
 	keysI, err := redis.Values(r.Connection.Do("KEYS", "*"))
 	if err != nil {
 		log.Fatal("redis.getWhitelist(): ", err)
+	}
+	if len(keysI) == 0 {
+		return wl
 	}
 	values, err := redis.Strings(r.Connection.Do("MGET", keysI[:]...))
 	if err != nil {
