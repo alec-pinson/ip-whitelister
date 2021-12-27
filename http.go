@@ -134,7 +134,7 @@ func (*Authentication) init(a Authentication) {
 func (a *Authentication) initAzure() {
 	ctx = context.Background()
 
-	var redirectURL = "http://localhost:8080/callback"
+	var redirectURL = c.Url + "/callback"
 	var authURL = fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/authorize?resource=https://graph.windows.net", c.Auth.TenantId)
 	var tokenURL = fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/token", c.Auth.TenantId)
 

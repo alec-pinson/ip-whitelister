@@ -3,6 +3,8 @@
 # Client Secret can also be set via env variable 'CLIENT_SECRET'
 # Redis Access Token can also be set via env variable 'REDIS_TOKEN'
 
+url: http://localhost:8080
+
 auth:
   type: azure
   tenant_id: notreal-not-real-not-notreal

@@ -12,6 +12,7 @@ import (
 type Configuration struct {
 	File        string
 	Debug       bool
+	Url         string                  `yaml:"url"`
 	Redis       RedisConfiguration      `yaml:"redis"`
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
