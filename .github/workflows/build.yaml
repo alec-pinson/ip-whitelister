@@ -2,7 +2,7 @@ name: docker build & publish
 
 on:
   pull_request:
-  tags:
+  release:
   push:
     branches:
       - 'master'
