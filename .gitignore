@@ -29,4 +29,6 @@
 *.swp
 .idea
 .terraform.lock.hcl*
-config.yaml
+config/config.yaml
+ip-whitelister-secrets.yaml
+helm/values.yaml
