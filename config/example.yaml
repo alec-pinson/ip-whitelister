@@ -1,0 +1,29 @@
+# Path to this config can be set via env variable 'CONFIG_FILE'
+# App registration must have access to the Azure resources + Admin Consent for AzureAD
+# Client Secret can also be set via env variable 'CLIENT_SECRET'
+# Redis Access Token can also be set via env variable 'REDIS_TOKEN'
+
+url: http://localhost:8080
+
+auth:
+  type: azure
+  tenant_id: notreal-not-real-not-notreal
+  client_id: notreal-not-real-not-notreal
+  client_secret: notrealnotrealnotreal
+
+redis:
+  host: redis
+  port: 6379
+  token: my-sup3r-comp1ic4t3d-s3cr3t-t0k3n
+
+resources:
+  - cloud: azure
+    type: frontdoor
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: notreal-rg
+    policy_name: notrealpolicy
+
+# This whitelist should be static non-human IPs only
+ip_whitelist:
+  - 85.0.0.0/24 # my company proxy addresses 1
+  - 200.0.0.0/24 # my company proxy addresses 2
