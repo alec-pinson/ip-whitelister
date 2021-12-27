@@ -64,7 +64,7 @@ func (w *Whitelist) add(u *User) bool {
 	} else {
 		// ip already whitelisted ... renew redis expiry time though
 		log.Println("whitelist.add(): no changes required for '" + u.key + "', ip already set to " + u.ip)
-		r.addIp(u.key, u.cidr)
+		r.setIpExpiry(u.key)
 		return true
 	}
 }
