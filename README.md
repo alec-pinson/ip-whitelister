@@ -26,3 +26,4 @@ Login with AzureAD account and whitelist your IP against Cloud resources for 24 
 3. Run `docker-compose up -d`
 
 ### Helm
+See [README](helm/ip-whitelister/README.md)
