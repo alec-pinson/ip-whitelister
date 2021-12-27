@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  ip-whitelister:
+    image: alecpinson/ip-whitelister:pr-1
+    volumes:
+      - ./config:/app/config:ro
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      CONFIG_FILE: "/app/config/config.yaml"
+  redis:
+    image: redis:6.2.6-alpine
+    volumes:
+      - ./config:/usr/local/etc/redis:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
