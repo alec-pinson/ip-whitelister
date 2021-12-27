@@ -34,9 +34,9 @@ func (c *Configuration) load() *Configuration {
 	}
 
 	c.File = os.Getenv("CONFIG_FILE")
-	// default to config/example.yaml
+	// default to config/config.yaml
 	if c.File == "" {
-		c.File = "config/example.yaml"
+		c.File = "config/config.yaml"
 	}
 
 	log.Println("config.load(): loading config file '" + c.File + "'")
