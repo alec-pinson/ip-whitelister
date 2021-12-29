@@ -1,9 +1,16 @@
 name: package helm chart
 
 on:
+  pull_request:
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm.yaml'
   push:
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm.yaml'
     branches:
-      # - main
+      - main
 
 jobs:
   release:
@@ -12,13 +19,6 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      -
-        name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
       -
         name: Install Helm
         uses: azure/setup-helm@v1
@@ -31,9 +31,17 @@ jobs:
         name: Template Helm chart
         run: helm template helm/ip-whitelister
       -
-        name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.2.1
+        if: github.ref == 'refs/heads/main' 
+        name: Package Helm chart
+        run: helm package helm/ip-whitelister && mv *.tgz helm-chart-`ls -1 *.tgz`
+      -
+        if: github.ref == 'refs/heads/main' 
+        name: Create release
+        uses: "marvinpinto/action-automatic-releases@latest"
         with:
-          charts_dir: helm/ip-whitelister
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          draft: true
+          prerelease: false
+          automatic_release_tag: helm-chart-update
+          files: |
+            *.tgz
