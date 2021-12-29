@@ -79,7 +79,7 @@ func TestConnect(t *testing.T) {
 
 	ret := r.connect(rc)
 
-	if ret != 0 {
+	if ret != true {
 		t.Error("redis.connect(): failed to connect, got 'failed connection', want 'successful connection'")
 	}
 
@@ -89,7 +89,7 @@ func TestConnect(t *testing.T) {
 	rc.Token = testRedisInstance.Token
 
 	ret = r.connect(rc)
-	if ret != 1 {
+	if ret != false {
 		t.Errorf("redis.connect(): connect for '%v:%v', got 'success', want 'fail'", rc.Host, rc.Port)
 	}
 
@@ -99,7 +99,7 @@ func TestConnect(t *testing.T) {
 	rc.Token = testRedisInstance.Token
 
 	ret = r.connect(rc)
-	if ret != 1 {
+	if ret != false {
 		t.Errorf("redis.connect(): connect for '%v:%v', got 'success', want 'fail'", rc.Host, rc.Port)
 	}
 
@@ -109,7 +109,7 @@ func TestConnect(t *testing.T) {
 	rc.Token = "wrongpassword!"
 
 	ret = r.connect(rc)
-	if ret != 1 {
+	if ret != false {
 		t.Errorf("redis.connect(): connect for '%v:%v' pw: %v, got 'success', want 'fail'", rc.Host, rc.Port, rc.Token)
 	}
 
@@ -120,13 +120,13 @@ func TestAddIp(t *testing.T) {
 	users := []struct {
 		user    string
 		cidr    string
-		success int
+		success bool
 	}{
-		{"testuser111111", "10.0.0.1/32", 0},
-		{"testuser111112", "10.0.0.2/32", 0},
-		{"testuser111113", "10.0.0.3/32", 0},
-		{"testuser111114", "10.0.0.4/32", 0},
-		{"testuser111115", "10.0.0.5/32", 0},
+		{"testuser111111", "10.0.0.1/32", true},
+		{"testuser111112", "10.0.0.2/32", true},
+		{"testuser111113", "10.0.0.3/32", true},
+		{"testuser111114", "10.0.0.4/32", true},
+		{"testuser111115", "10.0.0.5/32", true},
 	}
 
 	var testRedisInstance = CreateTestRedis(t)
@@ -135,7 +135,7 @@ func TestAddIp(t *testing.T) {
 	rc.Port = testRedisInstance.Port
 	rc.Token = testRedisInstance.Token
 	ret := r.connect(rc)
-	if ret == 0 {
+	if ret == true {
 		for _, f := range users {
 			ret = r.addIp(f.user, f.cidr)
 			if ret != f.success {
@@ -151,13 +151,13 @@ func TestDeleteIp(t *testing.T) {
 	users := []struct {
 		user    string
 		cidr    string
-		success int
+		success bool
 	}{
-		{"testuser111111", "10.0.0.1/32", 0},
-		{"testuser111112", "10.0.0.2/32", 0},
-		{"testuser111113", "10.0.0.3/32", 0},
-		{"testuser111114", "10.0.0.4/32", 0},
-		{"testuser111115", "10.0.0.5/32", 0},
+		{"testuser111111", "10.0.0.1/32", true},
+		{"testuser111112", "10.0.0.2/32", true},
+		{"testuser111113", "10.0.0.3/32", true},
+		{"testuser111114", "10.0.0.4/32", true},
+		{"testuser111115", "10.0.0.5/32", true},
 	}
 
 	var testRedisInstance = CreateTestRedis(t)
@@ -166,12 +166,12 @@ func TestDeleteIp(t *testing.T) {
 	rc.Port = testRedisInstance.Port
 	rc.Token = testRedisInstance.Token
 	ret := r.connect(rc)
-	if ret == 0 {
+	if ret == true {
 		for _, f := range users {
 			ret = r.addIp(f.user, f.cidr)
 			if ret == f.success {
 				ret = r.deleteIp(f.user)
-				if ret != 0 {
+				if ret != true {
 					t.Errorf("redis.deleteIp(): Delete user ip %v, want '%v', got '%v'", f, ret, f.success)
 				}
 			}
@@ -199,10 +199,10 @@ func TestGetWhitelist(t *testing.T) {
 	rc.Port = testRedisInstance.Port
 	rc.Token = testRedisInstance.Token
 	ret := r.connect(rc)
-	if ret == 0 {
+	if ret == true {
 		for _, f := range users {
 			ret = r.addIp(f.user, f.cidr)
-			if ret == 0 {
+			if ret == true {
 				ret := r.getWhitelist()
 				if ret[f.user] != f.cidr {
 					t.Errorf("redis.getWhitelist(): Get whitelist %v, got '%v', want '%v'", f, f.cidr, ret[f.user])
