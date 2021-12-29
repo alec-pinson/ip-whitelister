@@ -1,0 +1,26 @@
+# creates a release only if no changes to helm, if changes to helm will use helm.yaml
+name: release
+
+on:
+  push:
+    paths:
+      - '**'
+      - '!helm/**'
+      - '!.github/workflows/helm.yaml'
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Create release
+        uses: release-drafter/release-drafter@v5
+        with:
+          config-name: release-drafter.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
