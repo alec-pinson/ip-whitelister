@@ -51,28 +51,33 @@ func (w *Whitelist) add(u *User) bool {
 		}
 	}
 
-	if w.List[u.key] != u.cidr && alreadyWhitelisted == false {
+	if w.List[u.key] != u.cidr && !alreadyWhitelisted {
 		// need to update list
 		if w.List[u.key] == "" {
 			log.Println("whitelist.add(): no current whitelist for '" + u.key + "' was found, adding ip " + u.ip)
 		} else {
 			log.Println("whitelist.add(): updating whitelist for '" + u.key + "' from " + w.List[u.key] + " to " + u.ip)
 		}
-		r.addIp(u.key, u.cidr)
+		ret := r.addIp(u.key, u.cidr)
+		if !ret {
+			return ret
+		}
 		w.updateResources()
 		return true
 	} else {
 		// ip already whitelisted ... renew redis expiry time though
 		log.Println("whitelist.add(): no changes required for '" + u.key + "', ip already set to " + u.ip)
-		r.setIpExpiry(u.key)
-		return true
+		return r.setIpExpiry(u.key)
 	}
 }
 
 func (w *Whitelist) delete(u *User) bool {
-	r.deleteIp(u.key)
+	ret := r.deleteIp(u.key)
+	if !ret {
+		return ret
+	}
 	w.updateResources()
-	log.Println("whitelist.delete(): whitelisting for " + u.name + " removed.")
+	log.Println("whitelist.delete(): whitelisting for '" + u.key + "' removed.")
 	return true
 }
 
