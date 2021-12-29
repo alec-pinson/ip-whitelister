@@ -31,14 +31,9 @@ jobs:
         name: Template Helm chart
         run: helm template helm/ip-whitelister
       -
+        if: github.ref == 'refs/heads/main' 
         name: Package Helm chart
         run: helm package helm/ip-whitelister && mv *.tgz helm-chart-`ls -1 *.tgz`
-      -
-        name: Upload Helm chart artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: helm-chart.tgz
-          path: helm-chart-*.tgz
       -
         if: github.ref == 'refs/heads/main' 
         name: Create release
