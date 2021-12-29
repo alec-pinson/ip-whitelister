@@ -29,6 +29,6 @@ vendor/
 *.swp
 .idea
 .terraform.lock.hcl*
-config/config.yaml
+config/myconfig.yaml
 ip-whitelister-secrets.yaml
 helm/values.yaml

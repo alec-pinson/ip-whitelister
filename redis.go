@@ -27,10 +27,10 @@ type RedisConfiguration struct {
 	Connection redis.Conn
 }
 
-func (r *RedisConfiguration) connect(rc RedisConfiguration) int {
+func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 	if rc.Host == "" || rc.Port == 0 || rc.Token == "" {
 		log.Print("redis.connect(): no redis database configuration was found")
-		return 1
+		return false
 	}
 
 	log.Println("redis.connect(): connecting to redis database '" + rc.Host + ":" + strconv.Itoa(rc.Port) + "'")
@@ -38,27 +38,27 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) int {
 	c, err := redis.Dial("tcp", rc.Host+":"+strconv.Itoa(rc.Port))
 	if err != nil {
 		log.Printf("redis.connect(): %v ", err)
-		return 1
+		return false
 	}
 
 	_, err = c.Do("AUTH", rc.Token)
 	if err != nil {
 		log.Printf("redis.connect(): %v ", err)
-		return 1
+		return false
 	}
 
 	r.Connection = c
 	go r.keepAlive()
 	log.Println("redis.connect(): connected")
-	return 0
+	return true
 }
 
 // add ip
-func (r RedisConfiguration) addIp(user string, ip string) int {
+func (r RedisConfiguration) addIp(user string, ip string) bool {
 	_, err := r.Connection.Do("SET", user, ip)
 	if err != nil {
 		log.Fatal(err)
-		return 1
+		return false
 	}
 
 	// expire this key in x hours
@@ -66,23 +66,23 @@ func (r RedisConfiguration) addIp(user string, ip string) int {
 }
 
 // set ttl on ip
-func (r RedisConfiguration) setIpExpiry(user string) int {
+func (r RedisConfiguration) setIpExpiry(user string) bool {
 	_, err := r.Connection.Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
 	if err != nil {
 		log.Fatal(err)
-		return 1
+		return false
 	}
-	return 0
+	return true
 }
 
 // delete ip
-func (r RedisConfiguration) deleteIp(user string) int {
+func (r RedisConfiguration) deleteIp(user string) bool {
 	_, err := r.Connection.Do("DEL", user)
 	if err != nil {
 		log.Fatal(err)
-		return 1
+		return false
 	}
-	return 0
+	return true
 }
 
 // get whitelist
