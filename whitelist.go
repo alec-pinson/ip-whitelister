@@ -93,9 +93,13 @@ func (*Whitelist) ttl() {
 	}
 }
 
-func (*Whitelist) updateResources() {
+func (*Whitelist) updateResources() bool {
+	if c.Auth.TenantId == "notreal-not-real-not-notreal" {
+		return false
+	}
 	// azure frontdoor
 	for _, fd := range a.FrontDoor {
 		fd.update()
 	}
+	return true
 }

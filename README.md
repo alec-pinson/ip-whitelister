@@ -21,7 +21,7 @@ Login with AzureAD account and whitelist your IP against Cloud resources for 24 
 ## Usage
 
 ### Docker Compose
-1. Configure a config file see `config/example.yaml`
+1. Configure a config file see `config/config.yaml`
 2. Check/reconfigure `docker-compose.yaml`
 3. Run `docker-compose up -d`
 
