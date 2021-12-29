@@ -26,7 +26,10 @@ jobs:
           version: v3.7.1
       -
         name: Test Helm chart
-        run: helm install ip-whitelister helm/ip-whitelister --dry-run
+        run: helm lint helm/ip-whitelister
+      -
+        name: Template Helm chart
+        run: helm template helm/ip-whitelister
       -
         name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.2.1
