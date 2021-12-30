@@ -100,7 +100,7 @@ func (*Whitelist) updateResources() bool {
 	w.List = r.getWhitelist()
 	// azure frontdoor
 	for _, fd := range a.FrontDoor {
-		fd.update2()
+		fd.update()
 	}
 	return true
 }
