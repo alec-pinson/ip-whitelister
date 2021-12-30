@@ -62,7 +62,7 @@ func (c *Configuration) load() *Configuration {
 				fd.SubscriptionId = resource.SubscriptionId
 				fd.ResourceGroup = resource.ResourceGroup
 				fd.PolicyName = resource.PolicyName
-				a.FrontDoor = append(a.FrontDoor, fd)
+				fd.new(fd)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
