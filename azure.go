@@ -242,7 +242,7 @@ func (*Azure) authorize() (autorest.Authorizer, error) {
 	return a, nil
 }
 
-func (fd *AzureFrontDoor) update2() {
+func (fd *AzureFrontDoor) update2() int {
 
 	var rules []frontdoor.CustomRule
 
@@ -343,7 +343,6 @@ func (fd *AzureFrontDoor) update2() {
 	if err != nil {
 		log.Print(err)
 	}
-	log.Print(ret.Response().Status)     // 200 OK
-	log.Print(ret.Status())              // Succeeded
-	log.Print(ret.Response().StatusCode) // 200
+
+	return ret.Response().StatusCode
 }
