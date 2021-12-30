@@ -97,9 +97,10 @@ func (*Whitelist) updateResources() bool {
 	if c.Auth.TenantId == "notreal-not-real-not-notreal" {
 		return false
 	}
+	w.List = r.getWhitelist()
 	// azure frontdoor
 	for _, fd := range a.FrontDoor {
-		fd.update()
+		fd.update2()
 	}
 	return true
 }
