@@ -70,6 +70,12 @@ func (c *Configuration) load() *Configuration {
 				st.ResourceGroup = resource.ResourceGroup
 				st.Name = resource.Name
 				st.new(st)
+			case "keyvault":
+				var kv AzureKeyVault
+				kv.SubscriptionId = resource.SubscriptionId
+				kv.ResourceGroup = resource.ResourceGroup
+				kv.Name = resource.Name
+				kv.new(kv)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}

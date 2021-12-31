@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/frontdoor/mgmt/2019-10-01/frontdoor"
+	"github.com/Azure/azure-sdk-for-go/services/keyvault/mgmt/2019-09-01/keyvault"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-04-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
@@ -16,6 +17,7 @@ import (
 type Azure struct {
 	FrontDoor      []AzureFrontDoor
 	StorageAccount []AzureStorageAccount
+	KeyVault       []AzureKeyVault
 }
 
 type AzureFrontDoor struct {
@@ -30,6 +32,12 @@ type AzureStorageAccount struct {
 	Name           string
 }
 
+type AzureKeyVault struct {
+	SubscriptionId string
+	ResourceGroup  string
+	Name           string
+}
+
 func (*AzureFrontDoor) new(fd AzureFrontDoor) {
 	a.FrontDoor = append(a.FrontDoor, fd)
 	log.Println("azure.AzureFrontDoor.new(): frontdoor added '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
@@ -38,6 +46,11 @@ func (*AzureFrontDoor) new(fd AzureFrontDoor) {
 func (*AzureStorageAccount) new(st AzureStorageAccount) {
 	a.StorageAccount = append(a.StorageAccount, st)
 	log.Println("azure.AzureStorageAccount.new(): storage account added '" + st.ResourceGroup + "/" + st.Name + "'")
+}
+
+func (*AzureKeyVault) new(kv AzureKeyVault) {
+	a.KeyVault = append(a.KeyVault, kv)
+	log.Println("azure.AzureKeyVault.new(): key vault added '" + kv.ResourceGroup + "/" + kv.Name + "'")
 }
 
 func (*Azure) authorize() (autorest.Authorizer, error) {
@@ -202,8 +215,49 @@ func (st *AzureStorageAccount) update() int {
 		AccountPropertiesUpdateParameters: &storage.AccountPropertiesUpdateParameters{
 			AllowBlobPublicAccess: to.BoolPtr(false),
 			NetworkRuleSet: &storage.NetworkRuleSet{
-				// Bypass:        storage.BypassAzureServices,
 				DefaultAction: storage.DefaultActionDeny,
+				IPRules:       &ipRules,
+			},
+		},
+	})
+	if err != nil {
+		log.Print(err)
+	}
+
+	return ret.Response.StatusCode
+}
+
+func (kv *AzureKeyVault) update() int {
+
+	var ipRules []keyvault.IPRule
+	// ip whitelist
+	for _, ipval := range w.List {
+		ipRules = append(ipRules, keyvault.IPRule{
+			Value: to.StringPtr(ipval),
+		})
+	}
+
+	// static ip whitelist
+	for _, ipval := range c.IPWhiteList {
+		if strings.Contains(ipval, "/32") {
+			// storage account requires /32 be removed...
+			ipval = strings.ReplaceAll(ipval, "/32", "")
+		}
+		if strings.Contains(ipval, "/31") {
+			// error for now, later can add something to add the 2 individal ips
+			log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
+		}
+		ipRules = append(ipRules, keyvault.IPRule{
+			Value: to.StringPtr(ipval),
+		})
+	}
+
+	azkv := keyvault.NewVaultsClient(kv.SubscriptionId)
+	azkv.Authorizer, _ = a.authorize()
+	ret, err := azkv.Update(context.Background(), kv.ResourceGroup, kv.Name, keyvault.VaultPatchParameters{
+		Properties: &keyvault.VaultPatchProperties{
+			NetworkAcls: &keyvault.NetworkRuleSet{
+				DefaultAction: keyvault.Deny,
 				IPRules:       &ipRules,
 			},
 		},
