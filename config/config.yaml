@@ -27,6 +27,11 @@ resources:
     subscription_id: notreal-not-real-not-notreal
     resource_group: notreal-rg
     name: notrealstorage
+  - cloud: azure
+    type: keyvault
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: notreal-rg
+    name: notrealkeyvault
 
 # This whitelist should be static non-human IPs only
 ip_whitelist:

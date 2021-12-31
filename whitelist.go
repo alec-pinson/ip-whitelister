@@ -105,5 +105,8 @@ func (*Whitelist) updateResources() bool {
 	for _, st := range a.StorageAccount {
 		st.update()
 	}
+	for _, kv := range a.KeyVault {
+		kv.update()
+	}
 	return true
 }
