@@ -102,5 +102,8 @@ func (*Whitelist) updateResources() bool {
 	for _, fd := range a.FrontDoor {
 		fd.update()
 	}
+	for _, st := range a.StorageAccount {
+		st.update()
+	}
 	return true
 }

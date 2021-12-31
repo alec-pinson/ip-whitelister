@@ -4,15 +4,18 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/frontdoor/mgmt/2019-10-01/frontdoor"
+	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-04-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/to"
 )
 
 type Azure struct {
-	FrontDoor []AzureFrontDoor
+	FrontDoor      []AzureFrontDoor
+	StorageAccount []AzureStorageAccount
 }
 
 type AzureFrontDoor struct {
@@ -21,9 +24,20 @@ type AzureFrontDoor struct {
 	PolicyName     string
 }
 
+type AzureStorageAccount struct {
+	SubscriptionId string
+	ResourceGroup  string
+	Name           string
+}
+
 func (*AzureFrontDoor) new(fd AzureFrontDoor) {
 	a.FrontDoor = append(a.FrontDoor, fd)
 	log.Println("azure.AzureFrontDoor.new(): frontdoor added '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
+}
+
+func (*AzureStorageAccount) new(st AzureStorageAccount) {
+	a.StorageAccount = append(a.StorageAccount, st)
+	log.Println("azure.AzureStorageAccount.new(): storage account added '" + st.ResourceGroup + "/" + st.Name + "'")
 }
 
 func (*Azure) authorize() (autorest.Authorizer, error) {
@@ -52,7 +66,7 @@ func (fd *AzureFrontDoor) update() int {
 	}
 
 	// split into lists of 100 ips
-	// ip whitelisting
+	// ip whitelist
 	var ii int
 	for i, v := range chunkList(ips, 100) {
 		if len(v) != 0 {
@@ -76,7 +90,7 @@ func (fd *AzureFrontDoor) update() int {
 		}
 	}
 
-	// static ip whitelisting
+	// static ip whitelist
 	ii += 1
 	for i, v := range chunkList(c.IPWhiteList, 100) {
 		if len(v) != 0 {
@@ -145,4 +159,58 @@ func (fd *AzureFrontDoor) update() int {
 	}
 
 	return ret.Response().StatusCode
+}
+
+func (st *AzureStorageAccount) update() int {
+
+	var ipRules []storage.IPRule
+	// ip whitelist
+	for _, ipval := range w.List {
+		if strings.Contains(ipval, "/32") {
+			// storage account requires /32 be removed...
+			ipval = strings.ReplaceAll(ipval, "/32", "")
+		}
+		if strings.Contains(ipval, "/31") {
+			// error for now, later can add something to add the 2 individal ips
+			log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
+		}
+		ipRules = append(ipRules, storage.IPRule{
+			IPAddressOrRange: to.StringPtr(ipval),
+			Action:           storage.ActionAllow,
+		})
+	}
+
+	// static ip whitelist
+	for _, ipval := range c.IPWhiteList {
+		if strings.Contains(ipval, "/32") {
+			// storage account requires /32 be removed...
+			ipval = strings.ReplaceAll(ipval, "/32", "")
+		}
+		if strings.Contains(ipval, "/31") {
+			// error for now, later can add something to add the 2 individal ips
+			log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
+		}
+		ipRules = append(ipRules, storage.IPRule{
+			IPAddressOrRange: to.StringPtr(ipval),
+			Action:           storage.ActionAllow,
+		})
+	}
+
+	azst := storage.NewAccountsClient(st.SubscriptionId)
+	azst.Authorizer, _ = a.authorize()
+	ret, err := azst.Update(context.Background(), st.ResourceGroup, st.Name, storage.AccountUpdateParameters{
+		AccountPropertiesUpdateParameters: &storage.AccountPropertiesUpdateParameters{
+			AllowBlobPublicAccess: to.BoolPtr(false),
+			NetworkRuleSet: &storage.NetworkRuleSet{
+				// Bypass:        storage.BypassAzureServices,
+				DefaultAction: storage.DefaultActionDeny,
+				IPRules:       &ipRules,
+			},
+		},
+	})
+	if err != nil {
+		log.Print(err)
+	}
+
+	return ret.Response.StatusCode
 }

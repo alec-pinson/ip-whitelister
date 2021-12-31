@@ -25,6 +25,7 @@ type ResourceConfiguration struct {
 	SubscriptionId string `yaml:"subscription_id"`
 	ResourceGroup  string `yaml:"resource_group"`
 	PolicyName     string `yaml:"policy_name"`
+	Name           string `yaml:"name"`
 }
 
 func (c *Configuration) load() *Configuration {
@@ -63,6 +64,12 @@ func (c *Configuration) load() *Configuration {
 				fd.ResourceGroup = resource.ResourceGroup
 				fd.PolicyName = resource.PolicyName
 				fd.new(fd)
+			case "storageaccount":
+				var st AzureStorageAccount
+				st.SubscriptionId = resource.SubscriptionId
+				st.ResourceGroup = resource.ResourceGroup
+				st.Name = resource.Name
+				st.new(st)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
