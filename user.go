@@ -71,6 +71,11 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 		}
 	}
 
+	// annoying when testing locally, make up an ip :)
+	if u.ip == "::1" {
+		u.ip = "80.18.81.18"
+	}
+
 	u.cidr = u.ip + "/32"
 
 	log.Println("user.new(): authentication successful - " + u.name + " (" + u.employeeId + ") - " + u.ip)
