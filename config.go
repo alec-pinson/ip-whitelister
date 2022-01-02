@@ -76,6 +76,12 @@ func (c *Configuration) load() *Configuration {
 				kv.ResourceGroup = resource.ResourceGroup
 				kv.Name = resource.Name
 				kv.new(kv)
+			case "postgres":
+				var pg AzurePostgresServer
+				pg.SubscriptionId = resource.SubscriptionId
+				pg.ResourceGroup = resource.ResourceGroup
+				pg.Name = resource.Name
+				pg.new(pg)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
