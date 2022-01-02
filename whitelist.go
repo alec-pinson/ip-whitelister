@@ -26,11 +26,11 @@ func (*Whitelist) init() {
 	// connect to redis database
 	r.connect(c.Redis)
 
-	// initialize http/authentication
-	h.init(c.Auth)
-
 	// enable ttl check on whitelisted ips
 	go w.ttl()
+
+	// initialize http/authentication
+	h.init(c.Auth)
 }
 
 func (w *Whitelist) add(u *User) bool {
@@ -98,7 +98,6 @@ func (*Whitelist) updateResources() bool {
 		return false
 	}
 	w.List = r.getWhitelist()
-	// azure frontdoor
 	for _, fd := range a.FrontDoor {
 		fd.update()
 	}
@@ -107,6 +106,9 @@ func (*Whitelist) updateResources() bool {
 	}
 	for _, kv := range a.KeyVault {
 		kv.update()
+	}
+	for _, pg := range a.PostgresServer {
+		pg.update()
 	}
 	return true
 }
