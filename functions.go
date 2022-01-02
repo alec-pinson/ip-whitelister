@@ -1,5 +1,11 @@
 package main
 
+import (
+	"encoding/binary"
+	"log"
+	"net"
+)
+
 // function to split an array of strings
 func chunkList(array []string, count int) [][]string {
 	lena := len(array)
@@ -16,4 +22,31 @@ func chunkList(array []string, count int) [][]string {
 	}
 
 	return b
+}
+
+// function to get ips in subnet range
+func getIpList(cidr string) (first string, last string, all []string) {
+	var ret []string
+	// convert string to IPNet struct
+	_, ipv4Net, err := net.ParseCIDR(cidr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// convert IPNet struct mask and address to uint32
+	// network is BigEndian
+	mask := binary.BigEndian.Uint32(ipv4Net.Mask)
+	start := binary.BigEndian.Uint32(ipv4Net.IP)
+
+	// find the final address
+	finish := (start & mask) | (mask ^ 0xffffffff)
+
+	// loop through addresses as uint32
+	for i := start; i <= finish; i++ {
+		// convert back to net.IP
+		ip := make(net.IP, 4)
+		binary.BigEndian.PutUint32(ip, i)
+		ret = append(ret, ip.String())
+	}
+	return ret[0], ret[len(ret)-1], ret
 }
