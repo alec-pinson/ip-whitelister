@@ -19,6 +19,7 @@ Login with AzureAD account and whitelist your IP against Cloud resources for 24 
 - Azure FrontDoor
 - Azure Storage Account
 - Azure Key Vault
+- Azure Postgres Server
 
 ## Docker Image
 https://hub.docker.com/r/alecpinson/ip-whitelister
