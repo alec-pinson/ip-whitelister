@@ -89,7 +89,14 @@ envFrom:
 
 # config
 config: |
+  # App registration must have access to the Azure resources + Admin Consent for AzureAD
+  # Client Secret is set via env variable 'CLIENT_SECRET'
+  # Redis Access Token is set via env variable 'REDIS_TOKEN'
+
   url: https://<same-as-above-ingress-host>
+
+  # User whitelistings will expire/be removed after 24 hours
+  ttl: 24 # hours
 
   auth:
     type: azure
@@ -106,8 +113,29 @@ config: |
       subscription_id: notreal-not-real-not-notreal
       resource_group: notreal-rg
       policy_name: notrealpolicy
+    - cloud: azure
+      type: storageaccount
+      subscription_id: notreal-not-real-not-notreal
+      resource_group: notreal-rg
+      name: notrealstorage
+      group:
+        - b111111a-b11a-111a-bb11-1a111aaa11a11 # group object id
+    - cloud: azure
+      type: keyvault
+      subscription_id: notreal-not-real-not-notreal
+      resource_group: notreal-rg
+      name: notrealkeyvault
+    - cloud: azure
+      type: postgres
+      subscription_id: notreal-not-real-not-notreal
+      resource_group: notreal-rg
+      name: notpostgresserver
+      ip_whitelist:
+        - 51.0.0.0/24 # my company proxy addresses 3
+      group:
+        - a111111a-a11a-111a-aa11-1a111aaa11a11 # group object id
 
-  # This whitelist should be static non-human IPs only
+  # This whitelist will be applied to all resources and should be static non-human IPs only
   ip_whitelist:
     - 85.0.0.0/24 # my company proxy addresses 1
     - 200.0.0.0/24 # my company proxy addresses 2
