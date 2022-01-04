@@ -27,24 +27,28 @@ type AzureFrontDoor struct {
 	SubscriptionId string
 	ResourceGroup  string
 	PolicyName     string
+	Group          []string
 }
 
 type AzureStorageAccount struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	Group          []string
 }
 
 type AzureKeyVault struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	Group          []string
 }
 
 type AzurePostgresServer struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	Group          []string
 }
 
 func (*AzureFrontDoor) new(fd AzureFrontDoor) {
@@ -88,8 +92,16 @@ func (fd *AzureFrontDoor) update() int {
 	var rules []frontdoor.CustomRule
 
 	ips := make([]string, 0, len(w.List))
-	for _, ipval := range w.List {
-		ips = append(ips, ipval)
+	for key, ipval := range w.List {
+		if fd.Group == nil {
+			// no groups, allow everyone
+			ips = append(ips, ipval)
+		} else {
+			// groups in use, only allow people that are in the group
+			if hasGroup(fd.Group, r.getGroups(key)) {
+				ips = append(ips, ipval)
+			}
+		}
 	}
 
 	// split into lists of 100 ips

@@ -5,6 +5,7 @@ package main
 - Port
 - Token
 - Connection
+- func selectDatabase
 - func addIp
 - func deleteIp
 - func setIpExpiry
@@ -13,6 +14,7 @@ package main
 */
 
 import (
+	"encoding/json"
 	"log"
 	"strconv"
 	"time"
@@ -21,11 +23,14 @@ import (
 )
 
 type RedisConfiguration struct {
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	Token      string `yaml:"token"`
-	Connection redis.Conn
+	Host            string       `yaml:"host"`
+	Port            int          `yaml:"port"`
+	Token           string       `yaml:"token"`
+	Connection      []redis.Conn // db0 (used for whitelist), db1 (used for groups cache)
+	CurrentDatabase int
 }
+
+var redisDBCount int = 2
 
 func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 	if rc.Host == "" || rc.Port == 0 || rc.Token == "" {
@@ -33,21 +38,32 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 		return false
 	}
 
+	r.Connection = make([]redis.Conn, redisDBCount)
+
 	log.Println("redis.connect(): connecting to redis database '" + rc.Host + ":" + strconv.Itoa(rc.Port) + "'")
 
-	c, err := redis.Dial("tcp", rc.Host+":"+strconv.Itoa(rc.Port))
-	if err != nil {
-		log.Printf("redis.connect(): %v ", err)
-		return false
+	for db := 0; db <= (redisDBCount - 1); db++ {
+		c, err := redis.Dial("tcp", rc.Host+":"+strconv.Itoa(rc.Port))
+		if err != nil {
+			log.Printf("redis.connect(): %v ", err)
+			return false
+		}
+
+		_, err = c.Do("AUTH", rc.Token)
+		if err != nil {
+			log.Printf("redis.connect(): %v ", err)
+			return false
+		}
+
+		_, err = c.Do("SELECT", db)
+		if err != nil {
+			log.Fatal(err)
+			return false
+		}
+
+		r.Connection[db] = c
 	}
 
-	_, err = c.Do("AUTH", rc.Token)
-	if err != nil {
-		log.Printf("redis.connect(): %v ", err)
-		return false
-	}
-
-	r.Connection = c
 	go r.keepAlive()
 	log.Println("redis.connect(): connected")
 	return true
@@ -55,7 +71,7 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 
 // add ip
 func (r RedisConfiguration) addIp(user string, ip string) bool {
-	_, err := r.Connection.Do("SET", user, ip)
+	_, err := r.Connection[0].Do("SET", user, ip)
 	if err != nil {
 		log.Fatal(err)
 		return false
@@ -67,7 +83,7 @@ func (r RedisConfiguration) addIp(user string, ip string) bool {
 
 // set ttl on ip
 func (r RedisConfiguration) setIpExpiry(user string) bool {
-	_, err := r.Connection.Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
+	_, err := r.Connection[0].Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
 	if err != nil {
 		log.Fatal(err)
 		return false
@@ -77,7 +93,7 @@ func (r RedisConfiguration) setIpExpiry(user string) bool {
 
 // delete ip
 func (r RedisConfiguration) deleteIp(user string) bool {
-	_, err := r.Connection.Do("DEL", user)
+	_, err := r.Connection[0].Do("DEL", user)
 	if err != nil {
 		log.Fatal(err)
 		return false
@@ -91,14 +107,14 @@ func (r RedisConfiguration) getWhitelist() map[string]string {
 
 	redisResponse1 := time.Now()
 
-	keysI, err := redis.Values(r.Connection.Do("KEYS", "*"))
+	keysI, err := redis.Values(r.Connection[0].Do("KEYS", "*"))
 	if err != nil {
 		log.Fatal("redis.getWhitelist(): ", err)
 	}
 	if len(keysI) == 0 {
 		return wl
 	}
-	values, err := redis.Strings(r.Connection.Do("MGET", keysI[:]...))
+	values, err := redis.Strings(r.Connection[0].Do("MGET", keysI[:]...))
 	if err != nil {
 		log.Fatal("redis.getWhitelist(): ", err)
 	}
@@ -121,12 +137,70 @@ func (r RedisConfiguration) getWhitelist() map[string]string {
 	return wl
 }
 
+// add group
+func (r RedisConfiguration) addGroups(user string, groups []string) bool {
+	jsonGroups, err := json.Marshal(groups)
+	if err != nil {
+		log.Print(err)
+		return false
+	}
+	_, err = r.Connection[1].Do("SET", user, jsonGroups)
+	if err != nil {
+		log.Fatal(err)
+		return false
+	}
+
+	// expire this key in x hours
+	return r.setGroupExpiry(user)
+}
+
+func (r RedisConfiguration) setGroupExpiry(user string) bool {
+	_, err := r.Connection[1].Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600+10))
+	if err != nil {
+		log.Fatal(err)
+		return false
+	}
+	return true
+}
+
+// get groups
+func (r RedisConfiguration) getGroups(user string) []string {
+	var g []string
+
+	redisResponse1 := time.Now()
+
+	keysI, err := redis.Values(r.Connection[1].Do("KEYS", user))
+	if err != nil {
+		log.Print("redis.getGroups(): ", err)
+		return g
+	}
+	if len(keysI) == 0 {
+		return g
+	}
+	value, err := redis.String(r.Connection[1].Do("GET", user))
+	if err != nil {
+		log.Print("redis.getGroups(): ", err)
+		return g
+	}
+	if err := json.Unmarshal([]byte(value), &g); err != nil {
+		log.Println(err)
+		return g
+	}
+
+	redisResponse2 := time.Now()
+	log.Println("redis.getGroups(): response time:", redisResponse2.Sub(redisResponse1))
+
+	return g
+}
+
 func (r RedisConfiguration) keepAlive() {
 	// run every 5 minutes
 	for range time.Tick(time.Minute * 5) {
-		_, err := redis.Strings(r.Connection.Do("KEYS", "*"))
-		if err != nil {
-			log.Fatal("redis.keepAlive(): ", err)
+		for db := 0; db <= (redisDBCount - 1); db++ {
+			_, err := redis.Strings(r.Connection[db].Do("KEYS", "*"))
+			if err != nil {
+				log.Fatal("redis.keepAlive(): ", err)
+			}
 		}
 	}
 }

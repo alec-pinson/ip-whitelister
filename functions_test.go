@@ -23,3 +23,26 @@ func TestChunkList(t *testing.T) {
 	}
 
 }
+
+func TestHasGroup(t *testing.T) {
+
+	groups := []struct {
+		resourceGroup []string
+		userGroup     []string
+		success       bool
+	}{
+		{[]string{"group1", "group2"}, []string{"group1", "group5"}, true},
+		{[]string{"group5"}, []string{"group5", "group10"}, true},
+		{[]string{"group1", "group2"}, []string{"group6", "group2"}, true},
+		{[]string{"group1"}, []string{"group9", "group10", "group11"}, false},
+		{[]string{"group1", "group2", "group3", "group4"}, []string{"group5"}, false},
+	}
+
+	for _, f := range groups {
+		success := hasGroup(f.resourceGroup, f.userGroup)
+		if success != f.success {
+			t.Errorf("hasGroup for %v was incorrect, got %v, want %v", f, success, f.success)
+		}
+	}
+
+}

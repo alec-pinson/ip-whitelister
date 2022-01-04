@@ -213,3 +213,63 @@ func TestGetWhitelist(t *testing.T) {
 
 	DeleteTestRedis(t, testRedisInstance)
 }
+
+func TestAddGroups(t *testing.T) {
+	users := []struct {
+		user    string
+		groups  []string
+		success bool
+	}{
+		{"testuser111111", []string{"group1", "group2", "group3"}, true},
+		{"testuser111112", []string{"group1", "group2"}, true},
+	}
+
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	ret := r.connect(rc)
+	if ret == true {
+		for _, f := range users {
+			ret = r.addGroups(f.user, f.groups)
+			if ret != f.success {
+				t.Errorf("redis.addGroups(): Add groups %v, got '%v', want '%v'", f, ret, f.success)
+			}
+		}
+	}
+
+	DeleteTestRedis(t, testRedisInstance)
+}
+
+func TestGetGroups(t *testing.T) {
+	users := []struct {
+		user    string
+		groups  []string
+		success int
+	}{
+		{"testuser111111", []string{"group1", "group2", "group3"}, 3},
+		{"testuser111112", []string{"group1", "group2"}, 2},
+		{"testuser111113", []string{"group1", "group2", "group3", "group4", "group5", "group6", "group7", "group8"}, 8},
+	}
+
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	ret := r.connect(rc)
+	if ret == true {
+		for _, f := range users {
+			ret = r.addGroups(f.user, f.groups)
+			if ret == true {
+				ret := r.getGroups(f.user)
+				if len(ret) != f.success {
+					t.Errorf("redis.getWhitelist(): Get whitelist %v, got '%v', want '%v'", f, len(ret), f.success)
+				}
+			}
+		}
+	}
+
+	DeleteTestRedis(t, testRedisInstance)
+}
