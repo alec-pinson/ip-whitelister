@@ -27,6 +27,7 @@ type AzureFrontDoor struct {
 	SubscriptionId string
 	ResourceGroup  string
 	PolicyName     string
+	IPWhiteList    []string
 	Group          []string
 }
 
@@ -34,6 +35,7 @@ type AzureStorageAccount struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	IPWhiteList    []string
 	Group          []string
 }
 
@@ -41,6 +43,7 @@ type AzureKeyVault struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	IPWhiteList    []string
 	Group          []string
 }
 
@@ -48,6 +51,7 @@ type AzurePostgresServer struct {
 	SubscriptionId string
 	ResourceGroup  string
 	Name           string
+	IPWhiteList    []string
 	Group          []string
 }
 
@@ -93,13 +97,16 @@ func (fd *AzureFrontDoor) update() int {
 
 	ips := make([]string, 0, len(w.List))
 	for key, ipval := range w.List {
-		if fd.Group == nil {
-			// no groups, allow everyone
-			ips = append(ips, ipval)
-		} else {
-			// groups in use, only allow people that are in the group
-			if hasGroup(fd.Group, r.getGroups(key)) {
+		if !w.inRange(ipval, fd.IPWhiteList) {
+			// ip not within static whitelist range
+			if fd.Group == nil {
+				// no groups, allow everyone
 				ips = append(ips, ipval)
+			} else {
+				// groups in use, only allow people that are in the group
+				if hasGroup(fd.Group, r.getGroups(key)) {
+					ips = append(ips, ipval)
+				}
 			}
 		}
 	}
@@ -131,7 +138,7 @@ func (fd *AzureFrontDoor) update() int {
 
 	// static ip whitelist
 	ii += 1
-	for i, v := range chunkList(c.IPWhiteList, 100) {
+	for i, v := range chunkList(append(c.IPWhiteList, fd.IPWhiteList...), 100) {
 		if len(v) != 0 {
 			rule := &frontdoor.CustomRule{
 				Name:         to.StringPtr("staticwhitelist" + strconv.Itoa(i)),
@@ -205,22 +212,25 @@ func (st *AzureStorageAccount) update() int {
 	var ipRules []storage.IPRule
 	// ip whitelist
 	for _, ipval := range w.List {
-		if strings.Contains(ipval, "/32") {
-			// storage account requires /32 be removed...
-			ipval = strings.ReplaceAll(ipval, "/32", "")
+		if !w.inRange(ipval, st.IPWhiteList) {
+			// ip not within static whitelist range
+			if strings.Contains(ipval, "/32") {
+				// storage account requires /32 be removed...
+				ipval = strings.ReplaceAll(ipval, "/32", "")
+			}
+			if strings.Contains(ipval, "/31") {
+				// error for now, later can add something to add the 2 individal ips
+				log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
+			}
+			ipRules = append(ipRules, storage.IPRule{
+				IPAddressOrRange: to.StringPtr(ipval),
+				Action:           storage.ActionAllow,
+			})
 		}
-		if strings.Contains(ipval, "/31") {
-			// error for now, later can add something to add the 2 individal ips
-			log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
-		}
-		ipRules = append(ipRules, storage.IPRule{
-			IPAddressOrRange: to.StringPtr(ipval),
-			Action:           storage.ActionAllow,
-		})
 	}
 
 	// static ip whitelist
-	for _, ipval := range c.IPWhiteList {
+	for _, ipval := range append(c.IPWhiteList, st.IPWhiteList...) {
 		if strings.Contains(ipval, "/32") {
 			// storage account requires /32 be removed...
 			ipval = strings.ReplaceAll(ipval, "/32", "")
@@ -258,13 +268,16 @@ func (kv *AzureKeyVault) update() int {
 	var ipRules []keyvault.IPRule
 	// ip whitelist
 	for _, ipval := range w.List {
-		ipRules = append(ipRules, keyvault.IPRule{
-			Value: to.StringPtr(ipval),
-		})
+		if !w.inRange(ipval, kv.IPWhiteList) {
+			// ip not within static whitelist range
+			ipRules = append(ipRules, keyvault.IPRule{
+				Value: to.StringPtr(ipval),
+			})
+		}
 	}
 
 	// static ip whitelist
-	for _, ipval := range c.IPWhiteList {
+	for _, ipval := range append(c.IPWhiteList, kv.IPWhiteList...) {
 		if strings.Contains(ipval, "/32") {
 			// storage account requires /32 be removed...
 			ipval = strings.ReplaceAll(ipval, "/32", "")
@@ -319,16 +332,19 @@ func (pg *AzurePostgresServer) update() int {
 	newRules := make(map[string]postgresql.FirewallRule)
 	// ip whitelist
 	for key, cidr := range w.List {
-		first, last, _ := getIpList(cidr)
-		newRules[key] = postgresql.FirewallRule{
-			FirewallRuleProperties: &postgresql.FirewallRuleProperties{
-				StartIPAddress: to.StringPtr(first),
-				EndIPAddress:   to.StringPtr(last),
-			},
+		if !w.inRange(cidr, pg.IPWhiteList) {
+			// ip not within static whitelist range
+			first, last, _ := getIpList(cidr)
+			newRules[key] = postgresql.FirewallRule{
+				FirewallRuleProperties: &postgresql.FirewallRuleProperties{
+					StartIPAddress: to.StringPtr(first),
+					EndIPAddress:   to.StringPtr(last),
+				},
+			}
 		}
 	}
 	// static ip whitelist
-	for _, cidr := range c.IPWhiteList {
+	for _, cidr := range append(c.IPWhiteList, pg.IPWhiteList...) {
 		first, last, _ := getIpList(cidr)
 		// reg expression for creating key
 		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
