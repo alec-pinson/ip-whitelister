@@ -99,14 +99,8 @@ func (fd *AzureFrontDoor) update() int {
 	for key, ipval := range w.List {
 		if !w.inRange(ipval, fd.IPWhiteList) {
 			// ip not within static whitelist range
-			if fd.Group == nil {
-				// no groups, allow everyone
+			if hasGroup(fd.Group, r.getGroups(key)) {
 				ips = append(ips, ipval)
-			} else {
-				// groups in use, only allow people that are in the group
-				if hasGroup(fd.Group, r.getGroups(key)) {
-					ips = append(ips, ipval)
-				}
 			}
 		}
 	}
@@ -211,7 +205,7 @@ func (st *AzureStorageAccount) update() int {
 
 	var ipRules []storage.IPRule
 	// ip whitelist
-	for _, ipval := range w.List {
+	for key, ipval := range w.List {
 		if !w.inRange(ipval, st.IPWhiteList) {
 			// ip not within static whitelist range
 			if strings.Contains(ipval, "/32") {
@@ -222,10 +216,12 @@ func (st *AzureStorageAccount) update() int {
 				// error for now, later can add something to add the 2 individal ips
 				log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
 			}
-			ipRules = append(ipRules, storage.IPRule{
-				IPAddressOrRange: to.StringPtr(ipval),
-				Action:           storage.ActionAllow,
-			})
+			if hasGroup(st.Group, r.getGroups(key)) {
+				ipRules = append(ipRules, storage.IPRule{
+					IPAddressOrRange: to.StringPtr(ipval),
+					Action:           storage.ActionAllow,
+				})
+			}
 		}
 	}
 
@@ -267,12 +263,14 @@ func (kv *AzureKeyVault) update() int {
 
 	var ipRules []keyvault.IPRule
 	// ip whitelist
-	for _, ipval := range w.List {
+	for key, ipval := range w.List {
 		if !w.inRange(ipval, kv.IPWhiteList) {
 			// ip not within static whitelist range
-			ipRules = append(ipRules, keyvault.IPRule{
-				Value: to.StringPtr(ipval),
-			})
+			if hasGroup(kv.Group, r.getGroups(key)) {
+				ipRules = append(ipRules, keyvault.IPRule{
+					Value: to.StringPtr(ipval),
+				})
+			}
 		}
 	}
 
@@ -334,12 +332,14 @@ func (pg *AzurePostgresServer) update() int {
 	for key, cidr := range w.List {
 		if !w.inRange(cidr, pg.IPWhiteList) {
 			// ip not within static whitelist range
-			first, last, _ := getIpList(cidr)
-			newRules[key] = postgresql.FirewallRule{
-				FirewallRuleProperties: &postgresql.FirewallRuleProperties{
-					StartIPAddress: to.StringPtr(first),
-					EndIPAddress:   to.StringPtr(last),
-				},
+			if hasGroup(pg.Group, r.getGroups(key)) {
+				first, last, _ := getIpList(cidr)
+				newRules[key] = postgresql.FirewallRule{
+					FirewallRuleProperties: &postgresql.FirewallRuleProperties{
+						StartIPAddress: to.StringPtr(first),
+						EndIPAddress:   to.StringPtr(last),
+					},
+				}
 			}
 		}
 	}
