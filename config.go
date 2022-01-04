@@ -27,6 +27,7 @@ type ResourceConfiguration struct {
 	ResourceGroup  string   `yaml:"resource_group"`
 	PolicyName     string   `yaml:"policy_name"`
 	Name           string   `yaml:"name"`
+	IPWhiteList    []string `yaml:"ip_whitelist"`
 	Group          []string `yaml:"group"`
 }
 
@@ -69,6 +70,7 @@ func (c *Configuration) load() *Configuration {
 				fd.SubscriptionId = resource.SubscriptionId
 				fd.ResourceGroup = resource.ResourceGroup
 				fd.PolicyName = resource.PolicyName
+				fd.IPWhiteList = resource.IPWhiteList
 				fd.Group = resource.Group
 				fd.new(fd)
 			case "storageaccount":
@@ -76,6 +78,7 @@ func (c *Configuration) load() *Configuration {
 				st.SubscriptionId = resource.SubscriptionId
 				st.ResourceGroup = resource.ResourceGroup
 				st.Name = resource.Name
+				st.IPWhiteList = resource.IPWhiteList
 				st.Group = resource.Group
 				st.new(st)
 			case "keyvault":
@@ -83,6 +86,7 @@ func (c *Configuration) load() *Configuration {
 				kv.SubscriptionId = resource.SubscriptionId
 				kv.ResourceGroup = resource.ResourceGroup
 				kv.Name = resource.Name
+				kv.IPWhiteList = resource.IPWhiteList
 				kv.Group = resource.Group
 				kv.new(kv)
 			case "postgres":
@@ -90,6 +94,7 @@ func (c *Configuration) load() *Configuration {
 				pg.SubscriptionId = resource.SubscriptionId
 				pg.ResourceGroup = resource.ResourceGroup
 				pg.Name = resource.Name
+				pg.IPWhiteList = resource.IPWhiteList
 				pg.Group = resource.Group
 				pg.new(pg)
 			default:
