@@ -25,7 +25,16 @@ type User struct {
 	name       string
 	employeeId string
 	ip         string
-	cidr       string // microsoft saying without /32 can cause issues... dont believe them but w/e ticket id - 2106010050001687
+	cidr       string   // microsoft saying without /32 can cause issues... dont believe them but w/e ticket id - 2106010050001687
+	groups     []string // list of object ids
+}
+
+type AzGetGroup struct {
+	Value []AzGroup `json:"value"`
+}
+
+type AzGroup struct {
+	ObjectId string `json:"objectId`
 }
 
 func (u *User) new(client *http.Client, req *http.Request) *User {
@@ -54,6 +63,37 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 
 	u.employeeId = fmt.Sprintf("%v", ud["employeeId"])
 	u.name = fmt.Sprintf("%v", ud["displayName"])
+
+	// get users groups
+	resp, err = client.Get("https://graph.windows.net/me/memberOf?api-version=1.6")
+	if err != nil {
+		log.Printf("user.new(): error creating token  %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Printf("user.new(): token response was %s", resp.Status)
+		return nil
+	}
+
+	var ug AzGetGroup
+	if err := json.NewDecoder(resp.Body).Decode(&ug); err != nil {
+		log.Printf("user.new(): error decoding JSON response: %v", err)
+		return nil
+	}
+
+	if c.Debug {
+		log.Printf("user.new(): %v", ug)
+	}
+
+	for _, g := range ug.Value {
+		u.groups = append(u.groups, g.ObjectId)
+	}
+
+	if c.Debug {
+		log.Printf("user.new(): %v groups: %v", u.name, u.groups)
+	}
 
 	// Create our 'key' by removing spaces, converting to lower and removing all special characters
 	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
