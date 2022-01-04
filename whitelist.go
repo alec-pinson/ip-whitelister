@@ -37,7 +37,11 @@ func (*Whitelist) init() {
 func (w *Whitelist) add(u *User) bool {
 	w.List = r.getWhitelist()
 
-	if w.List[u.key] != u.cidr && !w.inRange(u.ip, c.IPWhiteList) {
+	if w.inRange(u.ip, c.IPWhiteList) {
+		return false
+	}
+
+	if w.List[u.key] != u.cidr {
 		// need to update list
 		if w.List[u.key] == "" {
 			log.Println("whitelist.add(): no current whitelist for '" + u.key + "' was found, adding ip " + u.ip)
