@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -36,22 +37,11 @@ func (*Whitelist) init() {
 func (w *Whitelist) add(u *User) bool {
 	w.List = r.getWhitelist()
 
-	// first check ip not in range of config.IPWhiteList
-	// convert client ip to net.IP
-	clientIp := net.ParseIP(u.ip)
-	var alreadyWhitelisted = false
-	for _, v := range c.IPWhiteList {
-		// cidr, parse it
-		_, subnet, _ := net.ParseCIDR(v)
-		if subnet.Contains(clientIp) {
-			// ip has already been whitelisted
-			alreadyWhitelisted = true
-			log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", u.ip, v)
-			return false
-		}
+	if w.inRange(u.ip, c.IPWhiteList) {
+		return false
 	}
 
-	if w.List[u.key] != u.cidr && !alreadyWhitelisted {
+	if w.List[u.key] != u.cidr {
 		// need to update list
 		if w.List[u.key] == "" {
 			log.Println("whitelist.add(): no current whitelist for '" + u.key + "' was found, adding ip " + u.ip)
@@ -115,4 +105,20 @@ func (*Whitelist) updateResources() bool {
 		pg.update()
 	}
 	return true
+}
+
+func (*Whitelist) inRange(ip string, whitelist []string) bool {
+	netIp := net.ParseIP(strings.Split(ip, "/")[0])
+	for _, v := range whitelist {
+		// cidr, parse it
+		_, subnet, _ := net.ParseCIDR(v)
+		if subnet.Contains(netIp) {
+			// ip has already been whitelisted
+			if c.Debug {
+				log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+			}
+			return true
+		}
+	}
+	return false
 }
