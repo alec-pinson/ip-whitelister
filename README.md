@@ -6,7 +6,7 @@ Login with AzureAD account and whitelist your IP against Cloud resources for 24 
 
 1. User authenticates with AzureAD
 2. Public IP is checked to make sure it is not part of the static `ipwhitelist`
-3. Public IP is added to Redis database with ttl of `24` hours
+3. Public IP is added to Redis database with ttl of `24` (configurable) hours
 4. *Check if user is in required group (only if group specified for resource)*
 5. Public IP is whitelisted against Cloud resources
 

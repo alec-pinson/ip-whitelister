@@ -1,7 +1,5 @@
 package main
 
-const whitelistTTL = 1 // 24 hours
-
 var (
 	c Configuration
 	r RedisConfiguration
