@@ -5,6 +5,9 @@
 
 url: http://localhost:8080
 
+# User whitelistings will expire/be removed after 24 hours
+ttl: 24 # hours
+
 auth:
   type: azure
   tenant_id: notreal-not-real-not-notreal

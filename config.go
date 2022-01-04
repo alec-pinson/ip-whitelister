@@ -17,6 +17,7 @@ type Configuration struct {
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
+	TTL         int                     `yaml":ttl"`
 }
 
 type ResourceConfiguration struct {
@@ -52,6 +53,10 @@ func (c *Configuration) load() *Configuration {
 	err = yaml.Unmarshal(yamlFile, &c)
 	if err != nil {
 		log.Fatalf("config.load(): %v", err)
+	}
+
+	if c.TTL == 0 {
+		c.TTL = 24
 	}
 
 	// load resources
