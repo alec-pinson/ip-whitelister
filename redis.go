@@ -83,7 +83,7 @@ func (r RedisConfiguration) addIp(user string, ip string) bool {
 
 // set ttl on ip
 func (r RedisConfiguration) setIpExpiry(user string) bool {
-	_, err := r.Connection[0].Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600))
+	_, err := r.Connection[0].Do("EXPIRE", user, strconv.Itoa(c.TTL*3600))
 	if err != nil {
 		log.Fatal(err)
 		return false
@@ -155,7 +155,7 @@ func (r RedisConfiguration) addGroups(user string, groups []string) bool {
 }
 
 func (r RedisConfiguration) setGroupExpiry(user string) bool {
-	_, err := r.Connection[1].Do("EXPIRE", user, strconv.Itoa(whitelistTTL*3600+10))
+	_, err := r.Connection[1].Do("EXPIRE", user, strconv.Itoa(c.TTL*3600+10))
 	if err != nil {
 		log.Fatal(err)
 		return false

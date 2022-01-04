@@ -126,7 +126,7 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 func (u *User) whitelist() {
 	s := w.add(u)
 	if s {
-		log.Println("user.whitelist(): Whitelisting for '" + u.ip + "' (" + u.name + ") will expire on " + time.Now().Add(whitelistTTL*time.Hour).Format("02-01-2006 at 15:04"))
+		log.Println("user.whitelist(): Whitelisting for '" + u.ip + "' (" + u.name + ") will expire on " + time.Now().Add(time.Duration(c.TTL)*time.Hour).Format("02-01-2006 at 15:04"))
 	}
 }
 
