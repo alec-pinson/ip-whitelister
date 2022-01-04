@@ -62,6 +62,10 @@ func (w *Whitelist) add(u *User) bool {
 		if !ret {
 			return ret
 		}
+		ret = r.addGroups(u.key, u.groups)
+		if !ret {
+			return ret
+		}
 		w.updateResources()
 		return true
 	} else {

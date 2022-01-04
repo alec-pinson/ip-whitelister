@@ -50,3 +50,15 @@ func getIpList(cidr string) (first string, last string, all []string) {
 	}
 	return ret[0], ret[len(ret)-1], ret
 }
+
+// function to check if any of the users groups are in the resources groups list
+func hasGroup(resourceGroups []string, userGroups []string) bool {
+	for _, rg := range resourceGroups {
+		for _, ug := range userGroups {
+			if rg == ug {
+				return true
+			}
+		}
+	}
+	return false
+}
