@@ -151,8 +151,8 @@ func (a *Authentication) initAzure() {
 	}
 
 	http.Handle("/callback", handle(callbackHandler))
-	// http.HandleFunc("/ip", IPHandler)
 	http.Handle("/", handle(IndexHandler))
+	log.Print("http.initAzure(): ip whitelister started")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 

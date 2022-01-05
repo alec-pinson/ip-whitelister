@@ -1,4 +1,3 @@
-// redis database
 resource "azurerm_redis_cache" "testing" {
   name                = format("%s-redis-testing", var.name)
   resource_group_name = azurerm_resource_group.this.name

@@ -188,7 +188,9 @@ func (r RedisConfiguration) getGroups(user string) []string {
 	}
 
 	redisResponse2 := time.Now()
-	log.Println("redis.getGroups(): response time:", redisResponse2.Sub(redisResponse1))
+	if c.Debug {
+		log.Println("redis.getGroups(): response time:", redisResponse2.Sub(redisResponse1))
+	}
 
 	return g
 }

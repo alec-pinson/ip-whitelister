@@ -105,6 +105,14 @@ func (c *Configuration) load() *Configuration {
 				rc.IPWhiteList = resource.IPWhiteList
 				rc.Group = resource.Group
 				rc.new(rc)
+			case "cosmosdb":
+				var cd AzureCosmosDb
+				cd.SubscriptionId = resource.SubscriptionId
+				cd.ResourceGroup = resource.ResourceGroup
+				cd.Name = resource.Name
+				cd.IPWhiteList = resource.IPWhiteList
+				cd.Group = resource.Group
+				cd.new(cd)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
