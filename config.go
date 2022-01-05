@@ -97,6 +97,14 @@ func (c *Configuration) load() *Configuration {
 				pg.IPWhiteList = resource.IPWhiteList
 				pg.Group = resource.Group
 				pg.new(pg)
+			case "redis":
+				var rc AzureRedisCache
+				rc.SubscriptionId = resource.SubscriptionId
+				rc.ResourceGroup = resource.ResourceGroup
+				rc.Name = resource.Name
+				rc.IPWhiteList = resource.IPWhiteList
+				rc.Group = resource.Group
+				rc.new(rc)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
