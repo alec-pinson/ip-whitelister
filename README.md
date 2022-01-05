@@ -22,6 +22,7 @@ Login with AzureAD account and whitelist your IP against Cloud resources for 24 
 - Azure Key Vault
 - Azure Postgres Server
 - Azure Redis Cache
+- Azure Cosmos DB
 
 ## Group Support
 It is now possible to specify a list of groups to each resource. This will mean in order to be whitelisted against the specific resource, the user will need to be part of one of the groups. If no groups are specified then all users are whitelisted against the resource.  

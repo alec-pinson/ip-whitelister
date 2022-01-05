@@ -107,6 +107,9 @@ func (*Whitelist) updateResources() bool {
 	for _, rc := range a.RedisCache {
 		rc.update()
 	}
+	for _, cd := range a.CosmosDb {
+		cd.update()
+	}
 	return true
 }
 

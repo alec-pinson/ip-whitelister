@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/cosmos-db/mgmt/2021-10-15/documentdb"
 	"github.com/Azure/azure-sdk-for-go/services/frontdoor/mgmt/2019-10-01/frontdoor"
 	"github.com/Azure/azure-sdk-for-go/services/keyvault/mgmt/2019-09-01/keyvault"
 	"github.com/Azure/azure-sdk-for-go/services/postgresql/mgmt/2020-01-01/postgresql"
@@ -23,6 +25,7 @@ type Azure struct {
 	KeyVault       []AzureKeyVault
 	PostgresServer []AzurePostgresServer
 	RedisCache     []AzureRedisCache
+	CosmosDb       []AzureCosmosDb
 }
 
 type AzureFrontDoor struct {
@@ -65,6 +68,15 @@ type AzureRedisCache struct {
 	Group          []string
 }
 
+type AzureCosmosDb struct {
+	SubscriptionId string
+	ResourceGroup  string
+	Name           string
+	IPWhiteList    []string
+	Group          []string
+	Queued         bool
+}
+
 func (*AzureFrontDoor) new(fd AzureFrontDoor) {
 	a.FrontDoor = append(a.FrontDoor, fd)
 	log.Println("azure.AzureFrontDoor.new(): frontdoor added '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
@@ -88,6 +100,11 @@ func (*AzurePostgresServer) new(pg AzurePostgresServer) {
 func (*AzureRedisCache) new(rc AzureRedisCache) {
 	a.RedisCache = append(a.RedisCache, rc)
 	log.Println("azure.AzureRedisCache.new(): redis cache added '" + rc.ResourceGroup + "/" + rc.Name + "'")
+}
+
+func (*AzureCosmosDb) new(cd AzureCosmosDb) {
+	a.CosmosDb = append(a.CosmosDb, cd)
+	log.Println("azure.AzureCosmosDb.new(): cosmos db added '" + cd.ResourceGroup + "/" + cd.Name + "'")
 }
 
 func (*Azure) authorize() (autorest.Authorizer, error) {
@@ -227,15 +244,24 @@ func (st *AzureStorageAccount) update() int {
 				// storage account requires /32 be removed...
 				ipval = strings.ReplaceAll(ipval, "/32", "")
 			}
-			if strings.Contains(ipval, "/31") {
-				// error for now, later can add something to add the 2 individal ips
-				log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
-			}
 			if hasGroup(st.Group, r.getGroups(key)) {
-				ipRules = append(ipRules, storage.IPRule{
-					IPAddressOrRange: to.StringPtr(ipval),
-					Action:           storage.ActionAllow,
-				})
+				if strings.Contains(ipval, "/31") {
+					// storage account doesnt support /31, have to split both ips
+					first, last, _ := getIpList(ipval)
+					ipRules = append(ipRules, storage.IPRule{
+						IPAddressOrRange: to.StringPtr(first),
+						Action:           storage.ActionAllow,
+					})
+					ipRules = append(ipRules, storage.IPRule{
+						IPAddressOrRange: to.StringPtr(last),
+						Action:           storage.ActionAllow,
+					})
+				} else {
+					ipRules = append(ipRules, storage.IPRule{
+						IPAddressOrRange: to.StringPtr(ipval),
+						Action:           storage.ActionAllow,
+					})
+				}
 			}
 		}
 	}
@@ -247,13 +273,22 @@ func (st *AzureStorageAccount) update() int {
 			ipval = strings.ReplaceAll(ipval, "/32", "")
 		}
 		if strings.Contains(ipval, "/31") {
-			// error for now, later can add something to add the 2 individal ips
-			log.Print("azure.AzureStorageAccount.update(): currently /31 ip addresses are not supported")
+			// storage account doesnt support /31, have to split both ips
+			first, last, _ := getIpList(ipval)
+			ipRules = append(ipRules, storage.IPRule{
+				IPAddressOrRange: to.StringPtr(first),
+				Action:           storage.ActionAllow,
+			})
+			ipRules = append(ipRules, storage.IPRule{
+				IPAddressOrRange: to.StringPtr(last),
+				Action:           storage.ActionAllow,
+			})
+		} else {
+			ipRules = append(ipRules, storage.IPRule{
+				IPAddressOrRange: to.StringPtr(ipval),
+				Action:           storage.ActionAllow,
+			})
 		}
-		ipRules = append(ipRules, storage.IPRule{
-			IPAddressOrRange: to.StringPtr(ipval),
-			Action:           storage.ActionAllow,
-		})
 	}
 
 	azst := storage.NewAccountsClient(st.SubscriptionId)
@@ -291,19 +326,6 @@ func (kv *AzureKeyVault) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, kv.IPWhiteList...) {
-		if strings.Contains(ipval, "/32") {
-			// storage account requires /32 be removed...
-			ipval = strings.ReplaceAll(ipval, "/32", "")
-		}
-		if strings.Contains(ipval, "/31") {
-			first, last, _ := getIpList(ipval)
-			ipRules = append(ipRules, keyvault.IPRule{
-				Value: to.StringPtr(first),
-			})
-			ipRules = append(ipRules, keyvault.IPRule{
-				Value: to.StringPtr(last),
-			})
-		}
 		ipRules = append(ipRules, keyvault.IPRule{
 			Value: to.StringPtr(ipval),
 		})
@@ -505,4 +527,64 @@ func (rc *AzureRedisCache) update() int {
 	}
 
 	return 0
+}
+
+func (cd *AzureCosmosDb) update() int {
+	if cd.Queued {
+		return 0
+	}
+
+	var ipRules []documentdb.IPAddressOrRange
+	// ip whitelist
+	for key, ipval := range w.List {
+		if !w.inRange(ipval, cd.IPWhiteList) {
+			// ip not within static whitelist range
+			if hasGroup(cd.Group, r.getGroups(key)) {
+				ipRules = append(ipRules, documentdb.IPAddressOrRange{
+					IPAddressOrRange: to.StringPtr(ipval),
+				})
+			}
+		}
+	}
+
+	// static ip whitelist
+	for _, ipval := range append(c.IPWhiteList, cd.IPWhiteList...) {
+		ipRules = append(ipRules, documentdb.IPAddressOrRange{
+			IPAddressOrRange: to.StringPtr(ipval),
+		})
+	}
+
+	azcd := documentdb.NewDatabaseAccountsClient(cd.SubscriptionId)
+	azcd.Authorizer, _ = a.authorize()
+	ret, err := azcd.Update(context.Background(), cd.ResourceGroup, cd.Name, documentdb.DatabaseAccountUpdateParameters{
+		DatabaseAccountUpdateProperties: &documentdb.DatabaseAccountUpdateProperties{
+			IPRules: &ipRules,
+		},
+	})
+	if err != nil {
+		if ret.Response().StatusCode == 412 {
+			// There is already an operation in progress which requires exclusive lock on this service. Please retry the operation after sometime.
+			// so stupid, queue job to run against in a few minutes :@
+			go cd.queueUpdate()
+		} else {
+			log.Print(err)
+		}
+	}
+
+	return ret.Response().StatusCode
+}
+
+func (cd *AzureCosmosDb) queueUpdate() {
+	if !cd.Queued {
+		cd.Queued = true
+		if c.Debug {
+			log.Print("azure.AzureCosmosDb.queueUpdate(): queued job, retrying in 2 minutes")
+		}
+		time.Sleep(time.Minute * 2)
+		if c.Debug {
+			log.Print("azure.AzureCosmosDb.queueUpdate(): retrying job")
+		}
+		cd.Queued = false
+		cd.update()
+	}
 }
