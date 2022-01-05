@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/frontdoor/mgmt/2019-10-01/frontdoor"
 	"github.com/Azure/azure-sdk-for-go/services/keyvault/mgmt/2019-09-01/keyvault"
 	"github.com/Azure/azure-sdk-for-go/services/postgresql/mgmt/2020-01-01/postgresql"
+	"github.com/Azure/azure-sdk-for-go/services/redis/mgmt/2020-12-01/redis"
 	"github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2021-04-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
@@ -21,6 +22,7 @@ type Azure struct {
 	StorageAccount []AzureStorageAccount
 	KeyVault       []AzureKeyVault
 	PostgresServer []AzurePostgresServer
+	RedisCache     []AzureRedisCache
 }
 
 type AzureFrontDoor struct {
@@ -55,6 +57,14 @@ type AzurePostgresServer struct {
 	Group          []string
 }
 
+type AzureRedisCache struct {
+	SubscriptionId string
+	ResourceGroup  string
+	Name           string
+	IPWhiteList    []string
+	Group          []string
+}
+
 func (*AzureFrontDoor) new(fd AzureFrontDoor) {
 	a.FrontDoor = append(a.FrontDoor, fd)
 	log.Println("azure.AzureFrontDoor.new(): frontdoor added '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
@@ -73,6 +83,11 @@ func (*AzureKeyVault) new(kv AzureKeyVault) {
 func (*AzurePostgresServer) new(pg AzurePostgresServer) {
 	a.PostgresServer = append(a.PostgresServer, pg)
 	log.Println("azure.AzurePostgresServer.new(): postgres server added '" + pg.ResourceGroup + "/" + pg.Name + "'")
+}
+
+func (*AzureRedisCache) new(rc AzureRedisCache) {
+	a.RedisCache = append(a.RedisCache, rc)
+	log.Println("azure.AzureRedisCache.new(): redis cache added '" + rc.ResourceGroup + "/" + rc.Name + "'")
 }
 
 func (*Azure) authorize() (autorest.Authorizer, error) {
@@ -394,6 +409,97 @@ func (pg *AzurePostgresServer) update() int {
 			if err != nil {
 				log.Print(err)
 				log.Print(ret.Response().StatusCode)
+			}
+		}
+	}
+
+	return 0
+}
+
+func (rc *AzureRedisCache) update() int {
+	azrc := redis.NewFirewallRulesClient(rc.SubscriptionId)
+	azrc.Authorizer, _ = a.authorize()
+
+	// 1. get current rules from postgres server
+	getCurrRules, err := azrc.List(context.Background(), rc.ResourceGroup, rc.Name)
+	if err != nil {
+		log.Print(err)
+		return 1
+	}
+
+	currRules := make(map[string]redis.FirewallRule)
+	for _, v := range getCurrRules.Values() {
+		currRules[strings.Split(*v.Name, "/")[1]] = v
+	}
+
+	// 2. generate list of what postgres server should look like
+	newRules := make(map[string]redis.FirewallRule)
+	// ip whitelist
+	for key, cidr := range w.List {
+		if !w.inRange(cidr, rc.IPWhiteList) {
+			// ip not within static whitelist range
+			if hasGroup(rc.Group, r.getGroups(key)) {
+				first, last, _ := getIpList(cidr)
+				newRules[key] = redis.FirewallRule{
+					FirewallRuleProperties: &redis.FirewallRuleProperties{
+						StartIP: to.StringPtr(first),
+						EndIP:   to.StringPtr(last),
+					},
+				}
+			}
+		}
+	}
+	// static ip whitelist
+	for _, cidr := range append(c.IPWhiteList, rc.IPWhiteList...) {
+		first, last, _ := getIpList(cidr)
+		// reg expression for creating key
+		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+		if err != nil {
+			log.Fatal(err)
+		}
+		key := reg.ReplaceAllString("static"+first+last, "")
+		newRules[key] = redis.FirewallRule{
+			FirewallRuleProperties: &redis.FirewallRuleProperties{
+				StartIP: to.StringPtr(first),
+				EndIP:   to.StringPtr(last),
+			},
+		}
+	}
+
+	// 3. compare lists and do necessary delete/add/update
+	for key, fwRule := range currRules {
+		if _, ok := newRules[key]; !ok {
+			// delete
+			if c.Debug {
+				log.Print("azure.RedisCache.update(): deleting rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+			}
+			ret, err := azrc.Delete(context.Background(), rc.ResourceGroup, rc.Name, key)
+			if err != nil {
+				log.Print(err)
+				log.Print(ret.Response.StatusCode)
+			}
+		}
+	}
+	for key, fwRule := range newRules {
+		if _, ok := currRules[key]; !ok {
+			// add
+			if c.Debug {
+				log.Print("azure.RedisCache.update(): adding rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+			}
+			ret, err := azrc.CreateOrUpdate(context.Background(), rc.ResourceGroup, rc.Name, key, fwRule)
+			if err != nil {
+				log.Print(err)
+				log.Print(ret.Response.StatusCode)
+			}
+		} else if *currRules[key].StartIP != *fwRule.StartIP || *currRules[key].EndIP != *fwRule.EndIP {
+			// update
+			if c.Debug {
+				log.Print("azure.RedisCache.update(): updating rule '" + key + "' - start: " + *currRules[key].StartIP + ", end: " + *currRules[key].EndIP + " to start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+			}
+			ret, err := azrc.CreateOrUpdate(context.Background(), rc.ResourceGroup, rc.Name, key, fwRule)
+			if err != nil {
+				log.Print(err)
+				log.Print(ret.Response.StatusCode)
 			}
 		}
 	}

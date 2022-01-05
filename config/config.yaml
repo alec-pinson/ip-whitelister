@@ -46,6 +46,11 @@ resources:
       - 51.0.0.0/24 # my company proxy addresses 3
     group:
       - a111111a-a11a-111a-aa11-1a111aaa11a11 # group object id
+  - cloud: azure
+    type: redis
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: notreal-rg
+    name: notrealredis
 
 # This whitelist will be applied to all resources and should be static non-human IPs only
 ip_whitelist:
