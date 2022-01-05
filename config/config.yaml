@@ -51,6 +51,12 @@ resources:
     subscription_id: notreal-not-real-not-notreal
     resource_group: notreal-rg
     name: notrealredis
+  - cloud: azure
+    type: cosmosdb
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: notreal-rg
+    name: notrealcosmosdb
+
 
 # This whitelist will be applied to all resources and should be static non-human IPs only
 ip_whitelist:

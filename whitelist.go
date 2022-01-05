@@ -30,6 +30,9 @@ func (*Whitelist) init() {
 	// enable ttl check on whitelisted ips
 	go w.ttl()
 
+	// update resources on startup
+	w.updateResources()
+
 	// initialize http/authentication
 	h.init(c.Auth)
 }
@@ -77,12 +80,8 @@ func (w *Whitelist) delete(u *User) bool {
 
 // trigger removal of ips due to ttl
 func (*Whitelist) ttl() {
-	w.List = r.getWhitelist()
-	w.updateResources()
-
-	// run every hour
+	// run every hour, might need increasing in future
 	for range time.Tick(time.Hour * 1) {
-		w.List = r.getWhitelist()
 		w.updateResources()
 	}
 }
@@ -106,6 +105,9 @@ func (*Whitelist) updateResources() bool {
 	}
 	for _, rc := range a.RedisCache {
 		rc.update()
+	}
+	for _, cd := range a.CosmosDb {
+		cd.update()
 	}
 	return true
 }
