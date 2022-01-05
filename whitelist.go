@@ -104,6 +104,9 @@ func (*Whitelist) updateResources() bool {
 	for _, pg := range a.PostgresServer {
 		pg.update()
 	}
+	for _, rc := range a.RedisCache {
+		rc.update()
+	}
 	return true
 }
 
