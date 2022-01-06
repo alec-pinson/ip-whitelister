@@ -594,7 +594,7 @@ func (cd *AzureCosmosDb) update() int {
 		if ret.Response().StatusCode == 412 {
 			// There is already an operation in progress which requires exclusive lock on this service. Please retry the operation after sometime.
 			// so stupid, queue job to run against in a few minutes :@
-			go cd.queueUpdate()
+			go cd.queueUpdate(cd)
 		} else {
 			log.Print("azure.AzureCosmosDb.update():", err)
 		}
@@ -605,9 +605,9 @@ func (cd *AzureCosmosDb) update() int {
 	return ret.Response().StatusCode
 }
 
-func (cd *AzureCosmosDb) queueUpdate() {
-	if !cd.Queued {
-		cd.Queued = true
+func (cd *AzureCosmosDb) queueUpdate(me *AzureCosmosDb) {
+	if !me.Queued {
+		me.Queued = true
 		if c.Debug {
 			log.Print("azure.AzureCosmosDb.queueUpdate(): queued job, retrying in 2 minutes")
 		}
@@ -615,7 +615,7 @@ func (cd *AzureCosmosDb) queueUpdate() {
 		if c.Debug {
 			log.Print("azure.AzureCosmosDb.queueUpdate(): retrying job")
 		}
-		cd.Queued = false
-		cd.update()
+		me.Queued = false
+		me.update()
 	}
 }
