@@ -10,6 +10,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/cenkalti/backoff v2.0.0+incompatible // indirect
+	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/gomodule/redigo v1.8.6
