@@ -98,7 +98,7 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 	// Create our 'key' by removing spaces, converting to lower and removing all special characters
 	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("user.new():", err)
 	}
 	u.key = strings.ToLower(reg.ReplaceAllString(u.name+u.employeeId, ""))
 
