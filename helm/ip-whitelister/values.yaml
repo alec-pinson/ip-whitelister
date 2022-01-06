@@ -134,6 +134,22 @@ config: |
         - 51.0.0.0/24 # my company proxy addresses 3
       group:
         - a111111a-a11a-111a-aa11-1a111aaa11a11 # group object id
+    - cloud: azure
+      type: redis
+      subscription_id: 268a4d72-ad25-43fe-859a-96c7cadb5173
+      resource_group: ap-test-rg
+      name: ap-test-redis-testing
+    - cloud: azure
+      type: cosmosdb
+      subscription_id: 268a4d72-ad25-43fe-859a-96c7cadb5173
+      resource_group: ap-test-rg
+      name: ap-test-cosmosdb
+      ip_whitelist: # https://docs.microsoft.com/en-us/azure/cosmos-db/how-to-configure-firewall#allow-requests-from-the-azure-portal
+        - 104.42.195.92
+        - 40.76.54.131
+        - 52.176.6.30
+        - 52.169.50.45
+        - 52.187.184.26
 
   # This whitelist will be applied to all resources and should be static non-human IPs only
   ip_whitelist:
