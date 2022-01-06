@@ -46,3 +46,24 @@ func TestHasGroup(t *testing.T) {
 	}
 
 }
+
+func TestIsIpv4(t *testing.T) {
+
+	tests := []struct {
+		ip      string
+		success bool
+	}{
+		{"12.12.12.12/32", true},
+		{"1.2.3.4/32", true},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", false},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111/32", false},
+	}
+
+	for _, f := range tests {
+		success := isIpv4(f.ip)
+		if success != f.success {
+			t.Errorf("isIpv4 for %v was incorrect, got %v, want %v", f, success, f.success)
+		}
+	}
+
+}

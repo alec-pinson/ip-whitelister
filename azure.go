@@ -124,6 +124,7 @@ func (*Azure) authorize() (autorest.Authorizer, error) {
 }
 
 func (fd *AzureFrontDoor) update() int {
+	log.Print("azure.AzureFrontDoor.update(): updating '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
 
 	var rules []frontdoor.CustomRule
 
@@ -230,15 +231,18 @@ func (fd *AzureFrontDoor) update() int {
 		log.Print("azure.AzureFrontDoor.update():", err)
 	}
 
+	log.Print("azure.AzureFrontDoor.update(): updated '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
+
 	return ret.Response().StatusCode
 }
 
 func (st *AzureStorageAccount) update() int {
+	log.Print("azure.AzureStorageAccount.update(): updating '" + st.ResourceGroup + "/" + st.Name + "'")
 
 	var ipRules []storage.IPRule
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, st.IPWhiteList) {
+		if !w.inRange(ipval, st.IPWhiteList) && isIpv4(ipval) {
 			// ip not within static whitelist range
 			if strings.Contains(ipval, "/32") {
 				// storage account requires /32 be removed...
@@ -268,26 +272,28 @@ func (st *AzureStorageAccount) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, st.IPWhiteList...) {
-		if strings.Contains(ipval, "/32") {
-			// storage account requires /32 be removed...
-			ipval = strings.ReplaceAll(ipval, "/32", "")
-		}
-		if strings.Contains(ipval, "/31") {
-			// storage account doesnt support /31, have to split both ips
-			first, last, _ := getIpList(ipval)
-			ipRules = append(ipRules, storage.IPRule{
-				IPAddressOrRange: to.StringPtr(first),
-				Action:           storage.ActionAllow,
-			})
-			ipRules = append(ipRules, storage.IPRule{
-				IPAddressOrRange: to.StringPtr(last),
-				Action:           storage.ActionAllow,
-			})
-		} else {
-			ipRules = append(ipRules, storage.IPRule{
-				IPAddressOrRange: to.StringPtr(ipval),
-				Action:           storage.ActionAllow,
-			})
+		if isIpv4(ipval) {
+			if strings.Contains(ipval, "/32") {
+				// storage account requires /32 be removed...
+				ipval = strings.ReplaceAll(ipval, "/32", "")
+			}
+			if strings.Contains(ipval, "/31") {
+				// storage account doesnt support /31, have to split both ips
+				first, last, _ := getIpList(ipval)
+				ipRules = append(ipRules, storage.IPRule{
+					IPAddressOrRange: to.StringPtr(first),
+					Action:           storage.ActionAllow,
+				})
+				ipRules = append(ipRules, storage.IPRule{
+					IPAddressOrRange: to.StringPtr(last),
+					Action:           storage.ActionAllow,
+				})
+			} else {
+				ipRules = append(ipRules, storage.IPRule{
+					IPAddressOrRange: to.StringPtr(ipval),
+					Action:           storage.ActionAllow,
+				})
+			}
 		}
 	}
 
@@ -306,15 +312,18 @@ func (st *AzureStorageAccount) update() int {
 		log.Print("azure.AzureStorageAccount.update():", err)
 	}
 
+	log.Print("azure.AzureStorageAccount.update(): updated '" + st.ResourceGroup + "/" + st.Name + "'")
+
 	return ret.Response.StatusCode
 }
 
 func (kv *AzureKeyVault) update() int {
+	log.Print("azure.AzureKeyVault.update(): updating '" + kv.ResourceGroup + "/" + kv.Name + "'")
 
 	var ipRules []keyvault.IPRule
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, kv.IPWhiteList) {
+		if !w.inRange(ipval, kv.IPWhiteList) && isIpv4(ipval) {
 			// ip not within static whitelist range
 			if hasGroup(kv.Group, r.getGroups(key)) {
 				ipRules = append(ipRules, keyvault.IPRule{
@@ -326,9 +335,11 @@ func (kv *AzureKeyVault) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, kv.IPWhiteList...) {
-		ipRules = append(ipRules, keyvault.IPRule{
-			Value: to.StringPtr(ipval),
-		})
+		if isIpv4(ipval) {
+			ipRules = append(ipRules, keyvault.IPRule{
+				Value: to.StringPtr(ipval),
+			})
+		}
 	}
 
 	azkv := keyvault.NewVaultsClient(kv.SubscriptionId)
@@ -345,10 +356,14 @@ func (kv *AzureKeyVault) update() int {
 		log.Print("azure.AzureKeyVault.update():", err)
 	}
 
+	log.Print("azure.AzureKeyVault.update(): updated '" + kv.ResourceGroup + "/" + kv.Name + "'")
+
 	return ret.Response.StatusCode
 }
 
 func (pg *AzurePostgresServer) update() int {
+	log.Print("azure.AzurePostgresServer.update(): updating '" + pg.ResourceGroup + "/" + pg.Name + "'")
+
 	azpg := postgresql.NewFirewallRulesClient(pg.SubscriptionId)
 	azpg.Authorizer, _ = a.authorize()
 
@@ -367,7 +382,7 @@ func (pg *AzurePostgresServer) update() int {
 	newRules := make(map[string]postgresql.FirewallRule)
 	// ip whitelist
 	for key, cidr := range w.List {
-		if !w.inRange(cidr, pg.IPWhiteList) {
+		if !w.inRange(cidr, pg.IPWhiteList) && isIpv4(cidr) {
 			// ip not within static whitelist range
 			if hasGroup(pg.Group, r.getGroups(key)) {
 				first, last, _ := getIpList(cidr)
@@ -382,18 +397,20 @@ func (pg *AzurePostgresServer) update() int {
 	}
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, pg.IPWhiteList...) {
-		first, last, _ := getIpList(cidr)
-		// reg expression for creating key
-		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-		if err != nil {
-			log.Fatal("azure.AzurePostgresServer.update():", err)
-		}
-		key := reg.ReplaceAllString("static"+first+last, "")
-		newRules[key] = postgresql.FirewallRule{
-			FirewallRuleProperties: &postgresql.FirewallRuleProperties{
-				StartIPAddress: to.StringPtr(first),
-				EndIPAddress:   to.StringPtr(last),
-			},
+		if isIpv4(cidr) {
+			first, last, _ := getIpList(cidr)
+			// reg expression for creating key
+			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+			if err != nil {
+				log.Fatal("azure.AzurePostgresServer.update():", err)
+			}
+			key := reg.ReplaceAllString("static"+first+last, "")
+			newRules[key] = postgresql.FirewallRule{
+				FirewallRuleProperties: &postgresql.FirewallRuleProperties{
+					StartIPAddress: to.StringPtr(first),
+					EndIPAddress:   to.StringPtr(last),
+				},
+			}
 		}
 	}
 
@@ -435,10 +452,14 @@ func (pg *AzurePostgresServer) update() int {
 		}
 	}
 
+	log.Print("azure.AzurePostgresServer.update(): updated '" + pg.ResourceGroup + "/" + pg.Name + "'")
+
 	return 0
 }
 
 func (rc *AzureRedisCache) update() int {
+	log.Print("azure.AzureRedisCache.update(): updating '" + rc.ResourceGroup + "/" + rc.Name + "'")
+
 	azrc := redis.NewFirewallRulesClient(rc.SubscriptionId)
 	azrc.Authorizer, _ = a.authorize()
 
@@ -458,7 +479,7 @@ func (rc *AzureRedisCache) update() int {
 	newRules := make(map[string]redis.FirewallRule)
 	// ip whitelist
 	for key, cidr := range w.List {
-		if !w.inRange(cidr, rc.IPWhiteList) {
+		if !w.inRange(cidr, rc.IPWhiteList) && isIpv4(cidr) {
 			// ip not within static whitelist range
 			if hasGroup(rc.Group, r.getGroups(key)) {
 				first, last, _ := getIpList(cidr)
@@ -473,18 +494,20 @@ func (rc *AzureRedisCache) update() int {
 	}
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, rc.IPWhiteList...) {
-		first, last, _ := getIpList(cidr)
-		// reg expression for creating key
-		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-		if err != nil {
-			log.Fatal("azure.AzureRedisCache.update():", err)
-		}
-		key := reg.ReplaceAllString("static"+first+last, "")
-		newRules[key] = redis.FirewallRule{
-			FirewallRuleProperties: &redis.FirewallRuleProperties{
-				StartIP: to.StringPtr(first),
-				EndIP:   to.StringPtr(last),
-			},
+		if isIpv4(cidr) {
+			first, last, _ := getIpList(cidr)
+			// reg expression for creating key
+			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+			if err != nil {
+				log.Fatal("azure.AzureRedisCache.update():", err)
+			}
+			key := reg.ReplaceAllString("static"+first+last, "")
+			newRules[key] = redis.FirewallRule{
+				FirewallRuleProperties: &redis.FirewallRuleProperties{
+					StartIP: to.StringPtr(first),
+					EndIP:   to.StringPtr(last),
+				},
+			}
 		}
 	}
 
@@ -526,6 +549,8 @@ func (rc *AzureRedisCache) update() int {
 		}
 	}
 
+	log.Print("azure.AzureRedisCache.update(): updated '" + rc.ResourceGroup + "/" + rc.Name + "'")
+
 	return 0
 }
 
@@ -534,10 +559,12 @@ func (cd *AzureCosmosDb) update() int {
 		return 0
 	}
 
+	log.Print("azure.AzureCosmosDb.update(): updating '" + cd.ResourceGroup + "/" + cd.Name + "'")
+
 	var ipRules []documentdb.IPAddressOrRange
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, cd.IPWhiteList) {
+		if !w.inRange(ipval, cd.IPWhiteList) && isIpv4(ipval) {
 			// ip not within static whitelist range
 			if hasGroup(cd.Group, r.getGroups(key)) {
 				ipRules = append(ipRules, documentdb.IPAddressOrRange{
@@ -549,9 +576,11 @@ func (cd *AzureCosmosDb) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, cd.IPWhiteList...) {
-		ipRules = append(ipRules, documentdb.IPAddressOrRange{
-			IPAddressOrRange: to.StringPtr(ipval),
-		})
+		if isIpv4(ipval) {
+			ipRules = append(ipRules, documentdb.IPAddressOrRange{
+				IPAddressOrRange: to.StringPtr(ipval),
+			})
+		}
 	}
 
 	azcd := documentdb.NewDatabaseAccountsClient(cd.SubscriptionId)
@@ -565,18 +594,20 @@ func (cd *AzureCosmosDb) update() int {
 		if ret.Response().StatusCode == 412 {
 			// There is already an operation in progress which requires exclusive lock on this service. Please retry the operation after sometime.
 			// so stupid, queue job to run against in a few minutes :@
-			go cd.queueUpdate()
+			go cd.queueUpdate(cd)
 		} else {
 			log.Print("azure.AzureCosmosDb.update():", err)
 		}
 	}
 
+	log.Print("azure.AzureCosmosDb.update(): updated '" + cd.ResourceGroup + "/" + cd.Name + "'")
+
 	return ret.Response().StatusCode
 }
 
-func (cd *AzureCosmosDb) queueUpdate() {
-	if !cd.Queued {
-		cd.Queued = true
+func (cd *AzureCosmosDb) queueUpdate(me *AzureCosmosDb) {
+	if !me.Queued {
+		me.Queued = true
 		if c.Debug {
 			log.Print("azure.AzureCosmosDb.queueUpdate(): queued job, retrying in 2 minutes")
 		}
@@ -584,7 +615,7 @@ func (cd *AzureCosmosDb) queueUpdate() {
 		if c.Debug {
 			log.Print("azure.AzureCosmosDb.queueUpdate(): retrying job")
 		}
-		cd.Queued = false
-		cd.update()
+		me.Queued = false
+		me.update()
 	}
 }
