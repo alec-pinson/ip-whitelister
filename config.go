@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v2"
 )
 
@@ -31,7 +32,9 @@ type ResourceConfiguration struct {
 	Group          []string `yaml:"group"`
 }
 
-func (c *Configuration) load() *Configuration {
+var defaultConfigFile = "config/config.yaml"
+
+func (c *Configuration) load(reload ...bool) *Configuration {
 	if strings.ToLower(os.Getenv("DEBUG")) == "true" {
 		c.Debug = true
 	} else {
@@ -39,12 +42,15 @@ func (c *Configuration) load() *Configuration {
 	}
 
 	c.File = os.Getenv("CONFIG_FILE")
-	// default to config/config.yaml
 	if c.File == "" {
-		c.File = "config/config.yaml"
+		c.File = defaultConfigFile
 	}
 
-	log.Println("config.load(): loading config file '" + c.File + "'")
+	if len(reload) == 0 {
+		log.Println("config.load(): loading config file '" + c.File + "'")
+	} else {
+		log.Println("config.load(): changes detected, reloading config file '" + c.File + "'")
+	}
 
 	// read config
 	yamlFile, err := ioutil.ReadFile(c.File)
@@ -59,6 +65,14 @@ func (c *Configuration) load() *Configuration {
 	if c.TTL == 0 {
 		c.TTL = 24
 	}
+
+	// empty resources first
+	a.FrontDoor = nil
+	a.KeyVault = nil
+	a.PostgresServer = nil
+	a.StorageAccount = nil
+	a.RedisCache = nil
+	a.CosmosDb = nil
 
 	// load resources
 	for _, resource := range c.Resources {
@@ -128,7 +142,58 @@ func (c *Configuration) load() *Configuration {
 		c.Redis.Token = os.Getenv("REDIS_TOKEN")
 	}
 
-	log.Println("config.load(): config file loaded")
+	if len(reload) == 0 {
+		log.Println("config.load(): config file loaded")
+	} else {
+		log.Println("config.load(): config file reloaded")
+	}
+
+	go c.watchForConfigChanges()
 
 	return c
+}
+
+func (c *Configuration) watchForConfigChanges() {
+	c.File = os.Getenv("CONFIG_FILE")
+	if c.File == "" {
+		c.File = defaultConfigFile
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if c.Debug {
+					log.Println("config.watchForConfigChanges(): event:", event)
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					if c.Debug {
+						log.Println("config.watchForConfigChanges(): modified file:", event.Name)
+					}
+					c.load(true)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("config.watchForConfigChanges(): error:", err)
+			}
+		}
+	}()
+
+	err = watcher.Add(c.File)
+	if err != nil {
+		log.Fatal(err)
+	}
+	<-done
 }
