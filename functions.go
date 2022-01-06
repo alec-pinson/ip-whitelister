@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"log"
 	"net"
+	"strings"
 )
 
 // function to split an array of strings
@@ -64,4 +65,20 @@ func hasGroup(resourceGroups []string, userGroups []string) bool {
 		}
 	}
 	return false
+}
+
+func isIpv4(cidr string) bool {
+	if !strings.Contains(cidr, "/") {
+		cidr = cidr + "/32"
+	}
+	_, ipv6Check, err := net.ParseCIDR(cidr)
+	if err != nil {
+		log.Fatal("functions.isIpv4():", err)
+	}
+
+	if ipv6Check.IP.To4() != nil {
+		return true
+	} else {
+		return false
+	}
 }

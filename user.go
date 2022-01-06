@@ -114,6 +114,7 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 	// annoying when testing locally, make up an ip :)
 	if u.ip == "::1" {
 		u.ip = "80.18.81.18"
+		// u.ip = "1a00:12a1:1234:a123:a12a:12a1:1a12:1234" // ipv6 testing
 	}
 
 	u.cidr = u.ip + "/32"
