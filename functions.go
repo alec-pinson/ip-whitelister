@@ -30,7 +30,7 @@ func getIpList(cidr string) (first string, last string, all []string) {
 	// convert string to IPNet struct
 	_, ipv4Net, err := net.ParseCIDR(cidr)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("functions.getIpList():", err)
 	}
 
 	// convert IPNet struct mask and address to uint32

@@ -227,7 +227,7 @@ func (fd *AzureFrontDoor) update() int {
 		},
 	})
 	if err != nil {
-		log.Print(err)
+		log.Print("azure.AzureFrontDoor.update():", err)
 	}
 
 	return ret.Response().StatusCode
@@ -303,7 +303,7 @@ func (st *AzureStorageAccount) update() int {
 		},
 	})
 	if err != nil {
-		log.Print(err)
+		log.Print("azure.AzureStorageAccount.update():", err)
 	}
 
 	return ret.Response.StatusCode
@@ -342,7 +342,7 @@ func (kv *AzureKeyVault) update() int {
 		},
 	})
 	if err != nil {
-		log.Print(err)
+		log.Print("azure.AzureKeyVault.update():", err)
 	}
 
 	return ret.Response.StatusCode
@@ -355,7 +355,7 @@ func (pg *AzurePostgresServer) update() int {
 	// 1. get current rules from postgres server
 	getCurrRules, err := azpg.ListByServer(context.Background(), pg.ResourceGroup, pg.Name)
 	if err != nil {
-		log.Print(err)
+		log.Print("azure.AzurePostgresServer.update():", err)
 		return 1
 	}
 	currRules := make(map[string]postgresql.FirewallRule)
@@ -386,7 +386,7 @@ func (pg *AzurePostgresServer) update() int {
 		// reg expression for creating key
 		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("azure.AzurePostgresServer.update():", err)
 		}
 		key := reg.ReplaceAllString("static"+first+last, "")
 		newRules[key] = postgresql.FirewallRule{
@@ -406,8 +406,8 @@ func (pg *AzurePostgresServer) update() int {
 			}
 			ret, err := azpg.Delete(context.Background(), pg.ResourceGroup, pg.Name, key)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response().StatusCode)
+				log.Print("azure.AzurePostgresServer.update():", err)
+				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
 			}
 		}
 	}
@@ -419,8 +419,8 @@ func (pg *AzurePostgresServer) update() int {
 			}
 			ret, err := azpg.CreateOrUpdate(context.Background(), pg.ResourceGroup, pg.Name, key, fwRule)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response().StatusCode)
+				log.Print("azure.AzurePostgresServer.update():", err)
+				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
 			}
 		} else if *currRules[key].StartIPAddress != *fwRule.StartIPAddress || *currRules[key].EndIPAddress != *fwRule.EndIPAddress {
 			// update
@@ -429,8 +429,8 @@ func (pg *AzurePostgresServer) update() int {
 			}
 			ret, err := azpg.CreateOrUpdate(context.Background(), pg.ResourceGroup, pg.Name, key, fwRule)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response().StatusCode)
+				log.Print("azure.AzurePostgresServer.update():", err)
+				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
 			}
 		}
 	}
@@ -445,7 +445,7 @@ func (rc *AzureRedisCache) update() int {
 	// 1. get current rules from postgres server
 	getCurrRules, err := azrc.List(context.Background(), rc.ResourceGroup, rc.Name)
 	if err != nil {
-		log.Print(err)
+		log.Print("azure.AzureRedisCache.update():", err)
 		return 1
 	}
 
@@ -477,7 +477,7 @@ func (rc *AzureRedisCache) update() int {
 		// reg expression for creating key
 		reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("azure.AzureRedisCache.update():", err)
 		}
 		key := reg.ReplaceAllString("static"+first+last, "")
 		newRules[key] = redis.FirewallRule{
@@ -493,12 +493,12 @@ func (rc *AzureRedisCache) update() int {
 		if _, ok := newRules[key]; !ok {
 			// delete
 			if c.Debug {
-				log.Print("azure.RedisCache.update(): deleting rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+				log.Print("azure.AzureRedisCache.update(): deleting rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
 			}
 			ret, err := azrc.Delete(context.Background(), rc.ResourceGroup, rc.Name, key)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response.StatusCode)
+				log.Print("azure.AzureRedisCache.update():", err)
+				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
 			}
 		}
 	}
@@ -506,22 +506,22 @@ func (rc *AzureRedisCache) update() int {
 		if _, ok := currRules[key]; !ok {
 			// add
 			if c.Debug {
-				log.Print("azure.RedisCache.update(): adding rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+				log.Print("azure.AzureRedisCache.update(): adding rule '" + key + "' - start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
 			}
 			ret, err := azrc.CreateOrUpdate(context.Background(), rc.ResourceGroup, rc.Name, key, fwRule)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response.StatusCode)
+				log.Print("azure.AzureRedisCache.update():", err)
+				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
 			}
 		} else if *currRules[key].StartIP != *fwRule.StartIP || *currRules[key].EndIP != *fwRule.EndIP {
 			// update
 			if c.Debug {
-				log.Print("azure.RedisCache.update(): updating rule '" + key + "' - start: " + *currRules[key].StartIP + ", end: " + *currRules[key].EndIP + " to start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
+				log.Print("azure.AzureRedisCache.update(): updating rule '" + key + "' - start: " + *currRules[key].StartIP + ", end: " + *currRules[key].EndIP + " to start: " + *fwRule.StartIP + ", end: " + *fwRule.EndIP)
 			}
 			ret, err := azrc.CreateOrUpdate(context.Background(), rc.ResourceGroup, rc.Name, key, fwRule)
 			if err != nil {
-				log.Print(err)
-				log.Print(ret.Response.StatusCode)
+				log.Print("azure.AzureRedisCache.update():", err)
+				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
 			}
 		}
 	}
@@ -567,7 +567,7 @@ func (cd *AzureCosmosDb) update() int {
 			// so stupid, queue job to run against in a few minutes :@
 			go cd.queueUpdate()
 		} else {
-			log.Print(err)
+			log.Print("azure.AzureCosmosDb.update():", err)
 		}
 	}
 
