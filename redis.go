@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -196,13 +197,16 @@ func (r RedisConfiguration) getGroups(user string) []string {
 }
 
 func (r RedisConfiguration) keepAlive() {
+	var mu sync.Mutex
 	// run every 5 minutes
 	for range time.Tick(time.Minute * 5) {
 		for db := 0; db <= (redisDBCount - 1); db++ {
+			mu.Lock()
 			_, err := redis.Strings(r.Connection[db].Do("KEYS", "*"))
 			if err != nil {
 				log.Fatal("redis.keepAlive(): ", err)
 			}
+			mu.Unlock()
 		}
 	}
 }
