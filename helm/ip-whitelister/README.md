@@ -93,6 +93,6 @@ config: |
 
 4. Deploy to your Kubernetes cluster
 ```
-helm upgrade ip-whitelister https://github.com/alec-pinson/ip-whitelister/releases/download/v0.0.3/helm-chart-ip-whitelister-0.2.0.tgz --install --wait -f values.yaml
+helm upgrade ip-whitelister https://github.com/alec-pinson/ip-whitelister/releases/download/v1.0.4/helm-chart-ip-whitelister-0.3.0.tgz --install --wait -f values.yaml
 ```
 
