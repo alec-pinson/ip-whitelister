@@ -57,7 +57,7 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 
 		_, err = c.Do("SELECT", db)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("redis.connect():", err)
 			return false
 		}
 
@@ -73,7 +73,7 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 func (r RedisConfiguration) addIp(user string, ip string) bool {
 	_, err := r.Connection[0].Do("SET", user, ip)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("redis.addIp():", err)
 		return false
 	}
 
@@ -85,7 +85,7 @@ func (r RedisConfiguration) addIp(user string, ip string) bool {
 func (r RedisConfiguration) setIpExpiry(user string) bool {
 	_, err := r.Connection[0].Do("EXPIRE", user, strconv.Itoa(c.TTL*3600))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("redis.setIpExpiry():", err)
 		return false
 	}
 	return true
@@ -95,7 +95,7 @@ func (r RedisConfiguration) setIpExpiry(user string) bool {
 func (r RedisConfiguration) deleteIp(user string) bool {
 	_, err := r.Connection[0].Do("DEL", user)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("redis.deleteIp():", err)
 		return false
 	}
 	return true
@@ -141,12 +141,12 @@ func (r RedisConfiguration) getWhitelist() map[string]string {
 func (r RedisConfiguration) addGroups(user string, groups []string) bool {
 	jsonGroups, err := json.Marshal(groups)
 	if err != nil {
-		log.Print(err)
+		log.Print("redis.addGroups():", err)
 		return false
 	}
 	_, err = r.Connection[1].Do("SET", user, jsonGroups)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("redis.addGroups():", err)
 		return false
 	}
 
@@ -157,7 +157,7 @@ func (r RedisConfiguration) addGroups(user string, groups []string) bool {
 func (r RedisConfiguration) setGroupExpiry(user string) bool {
 	_, err := r.Connection[1].Do("EXPIRE", user, strconv.Itoa(c.TTL*3600+10))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("redis.setGroupExpiry():", err)
 		return false
 	}
 	return true
@@ -183,7 +183,7 @@ func (r RedisConfiguration) getGroups(user string) []string {
 		return g
 	}
 	if err := json.Unmarshal([]byte(value), &g); err != nil {
-		log.Println(err)
+		log.Println("redis.getGroups():", err)
 		return g
 	}
 

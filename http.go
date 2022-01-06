@@ -78,7 +78,7 @@ func (h handle) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 	if err := h(w, req); err != nil {
-		log.Printf("Handler error: %v", err)
+		log.Printf("http.ServeHTTP(): %v", err)
 
 		if httpErr, ok := err.(Error); ok {
 			http.Error(w, httpErr.Message, httpErr.Code)
@@ -127,7 +127,7 @@ func (*Authentication) init(a Authentication) {
 	case "azure":
 		a.initAzure()
 	default:
-		log.Fatalln("unsupported authentication type '" + a.Type + "'")
+		log.Fatalln("http.init(): unsupported authentication type '" + a.Type + "'")
 	}
 }
 
@@ -166,14 +166,12 @@ func callbackHandler(w http.ResponseWriter, req *http.Request) error {
 	// Use the authorization code that is pushed to the redirect
 	// URL.
 	code := queryParts["code"][0]
-	// log.Printf("code: %s\n", code)
 
 	// Exchange will do the handshake to retrieve the initial access token.
 	token, err := oauthConfig.Exchange(ctx, code)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("http.callbackHandler():", err)
 	}
-	// log.Printf("Token: %s", token)
 	// The HTTP Client returned by conf.Client will refresh the token as necessary.
 	client := oauthConfig.Client(ctx, token)
 
