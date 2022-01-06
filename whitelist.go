@@ -115,14 +115,24 @@ func (*Whitelist) updateResources() bool {
 func (*Whitelist) inRange(ip string, whitelist []string) bool {
 	netIp := net.ParseIP(strings.Split(ip, "/")[0])
 	for _, v := range whitelist {
-		// cidr, parse it
-		_, subnet, _ := net.ParseCIDR(v)
-		if subnet.Contains(netIp) {
-			// ip has already been whitelisted
-			if c.Debug {
-				log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+		if strings.Contains(v, "/") {
+			// cidr, parse it
+			_, subnet, _ := net.ParseCIDR(v)
+			if subnet.Contains(netIp) {
+				// ip has already been whitelisted
+				if c.Debug {
+					log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+				}
+				return true
 			}
-			return true
+		} else {
+			// single ip
+			if v == ip {
+				// ip has already been whitelisted
+				if c.Debug {
+					log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+				}
+			}
 		}
 	}
 	return false
