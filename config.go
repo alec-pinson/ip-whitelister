@@ -176,7 +176,7 @@ func (c *Configuration) watchForConfigChanges() {
 				if c.Debug {
 					log.Println("config.watchForConfigChanges(): event:", event)
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
+				if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Remove == fsnotify.Remove {
 					if c.Debug {
 						log.Println("config.watchForConfigChanges(): modified file:", event.Name)
 					}
