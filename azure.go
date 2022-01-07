@@ -229,9 +229,9 @@ func (fd *AzureFrontDoor) update() int {
 	})
 	if err != nil {
 		log.Print("azure.AzureFrontDoor.update():", err)
+	} else {
+		log.Print("azure.AzureFrontDoor.update(): updated '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
 	}
-
-	log.Print("azure.AzureFrontDoor.update(): updated '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
 
 	return ret.Response().StatusCode
 }
@@ -310,9 +310,9 @@ func (st *AzureStorageAccount) update() int {
 	})
 	if err != nil {
 		log.Print("azure.AzureStorageAccount.update():", err)
+	} else {
+		log.Print("azure.AzureStorageAccount.update(): updated '" + st.ResourceGroup + "/" + st.Name + "'")
 	}
-
-	log.Print("azure.AzureStorageAccount.update(): updated '" + st.ResourceGroup + "/" + st.Name + "'")
 
 	return ret.Response.StatusCode
 }
@@ -354,15 +354,18 @@ func (kv *AzureKeyVault) update() int {
 	})
 	if err != nil {
 		log.Print("azure.AzureKeyVault.update():", err)
+	} else {
+		log.Print("azure.AzureKeyVault.update(): updated '" + kv.ResourceGroup + "/" + kv.Name + "'")
 	}
-
-	log.Print("azure.AzureKeyVault.update(): updated '" + kv.ResourceGroup + "/" + kv.Name + "'")
 
 	return ret.Response.StatusCode
 }
 
 func (pg *AzurePostgresServer) update() int {
 	log.Print("azure.AzurePostgresServer.update(): updating '" + pg.ResourceGroup + "/" + pg.Name + "'")
+
+	var error bool
+	error = false
 
 	azpg := postgresql.NewFirewallRulesClient(pg.SubscriptionId)
 	azpg.Authorizer, _ = a.authorize()
@@ -425,6 +428,7 @@ func (pg *AzurePostgresServer) update() int {
 			if err != nil {
 				log.Print("azure.AzurePostgresServer.update():", err)
 				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
+				error = true
 			}
 		}
 	}
@@ -438,6 +442,7 @@ func (pg *AzurePostgresServer) update() int {
 			if err != nil {
 				log.Print("azure.AzurePostgresServer.update():", err)
 				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
+				error = true
 			}
 		} else if *currRules[key].StartIPAddress != *fwRule.StartIPAddress || *currRules[key].EndIPAddress != *fwRule.EndIPAddress {
 			// update
@@ -448,17 +453,23 @@ func (pg *AzurePostgresServer) update() int {
 			if err != nil {
 				log.Print("azure.AzurePostgresServer.update():", err)
 				log.Print("azure.AzurePostgresServer.update():", ret.Response().StatusCode)
+				error = true
 			}
 		}
 	}
 
-	log.Print("azure.AzurePostgresServer.update(): updated '" + pg.ResourceGroup + "/" + pg.Name + "'")
+	if !error {
+		log.Print("azure.AzurePostgresServer.update(): updated '" + pg.ResourceGroup + "/" + pg.Name + "'")
+	}
 
 	return 0
 }
 
 func (rc *AzureRedisCache) update() int {
 	log.Print("azure.AzureRedisCache.update(): updating '" + rc.ResourceGroup + "/" + rc.Name + "'")
+
+	var error bool
+	error = false
 
 	azrc := redis.NewFirewallRulesClient(rc.SubscriptionId)
 	azrc.Authorizer, _ = a.authorize()
@@ -522,6 +533,7 @@ func (rc *AzureRedisCache) update() int {
 			if err != nil {
 				log.Print("azure.AzureRedisCache.update():", err)
 				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
+				error = true
 			}
 		}
 	}
@@ -535,6 +547,7 @@ func (rc *AzureRedisCache) update() int {
 			if err != nil {
 				log.Print("azure.AzureRedisCache.update():", err)
 				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
+				error = true
 			}
 		} else if *currRules[key].StartIP != *fwRule.StartIP || *currRules[key].EndIP != *fwRule.EndIP {
 			// update
@@ -545,11 +558,14 @@ func (rc *AzureRedisCache) update() int {
 			if err != nil {
 				log.Print("azure.AzureRedisCache.update():", err)
 				log.Print("azure.AzureRedisCache.update():", ret.Response.StatusCode)
+				error = true
 			}
 		}
 	}
 
-	log.Print("azure.AzureRedisCache.update(): updated '" + rc.ResourceGroup + "/" + rc.Name + "'")
+	if !error {
+		log.Print("azure.AzureRedisCache.update(): updated '" + rc.ResourceGroup + "/" + rc.Name + "'")
+	}
 
 	return 0
 }
@@ -598,9 +614,9 @@ func (cd *AzureCosmosDb) update() int {
 		} else {
 			log.Print("azure.AzureCosmosDb.update():", err)
 		}
+	} else {
+		log.Print("azure.AzureCosmosDb.update(): updated '" + cd.ResourceGroup + "/" + cd.Name + "'")
 	}
-
-	log.Print("azure.AzureCosmosDb.update(): updated '" + cd.ResourceGroup + "/" + cd.Name + "'")
 
 	return ret.Response().StatusCode
 }
