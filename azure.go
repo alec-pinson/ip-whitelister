@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"regexp"
 	"strconv"
@@ -134,6 +135,10 @@ func (fd *AzureFrontDoor) update() int {
 			// ip not within static whitelist range
 			if hasGroup(fd.Group, r.getGroups(key)) {
 				ips = append(ips, ipval)
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureFrontDoor.update(): user '"+key+"' is not part of any of the groups ", fd.Group, " required for frontdoor '"+fd.ResourceGroup+"/"+fd.PolicyName+"'")
+				}
 			}
 		}
 	}
@@ -206,7 +211,7 @@ func (fd *AzureFrontDoor) update() int {
 
 	azfd := frontdoor.NewPoliciesClient(fd.SubscriptionId)
 	azfd.Authorizer, _ = a.authorize()
-	ret, err := azfd.CreateOrUpdate(context.Background(), fd.ResourceGroup, fd.PolicyName, frontdoor.WebApplicationFirewallPolicy{
+	_, err := azfd.CreateOrUpdate(context.Background(), fd.ResourceGroup, fd.PolicyName, frontdoor.WebApplicationFirewallPolicy{
 		Location: to.StringPtr("Global"),
 		WebApplicationFirewallPolicyProperties: &frontdoor.WebApplicationFirewallPolicyProperties{
 			PolicySettings: &frontdoor.PolicySettings{
@@ -227,13 +232,17 @@ func (fd *AzureFrontDoor) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(rules, "", "\t")
+		log.Printf("azure.AzureFrontDoor.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureFrontDoor.update():", err)
 	} else {
 		log.Print("azure.AzureFrontDoor.update(): updated '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
 	}
 
-	return ret.Response().StatusCode
+	return 0
 }
 
 func (st *AzureStorageAccount) update() int {
@@ -265,6 +274,10 @@ func (st *AzureStorageAccount) update() int {
 						IPAddressOrRange: to.StringPtr(ipval),
 						Action:           storage.ActionAllow,
 					})
+				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureStorageAccount.update(): user '"+key+"' is not part of any of the groups ", st.Group, " required for storage account '"+st.ResourceGroup+"/"+st.Name+"'")
 				}
 			}
 		}
@@ -308,6 +321,10 @@ func (st *AzureStorageAccount) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureStorageAccount.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureStorageAccount.update():", err)
 	} else {
@@ -329,6 +346,10 @@ func (kv *AzureKeyVault) update() int {
 				ipRules = append(ipRules, keyvault.IPRule{
 					Value: to.StringPtr(ipval),
 				})
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureKeyVault.update(): user '"+key+"' is not part of any of the groups ", kv.Group, " required for keyvault '"+kv.ResourceGroup+"/"+kv.Name+"'")
+				}
 			}
 		}
 	}
@@ -352,6 +373,10 @@ func (kv *AzureKeyVault) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureKeyVault.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureKeyVault.update():", err)
 	} else {
@@ -394,6 +419,10 @@ func (pg *AzurePostgresServer) update() int {
 						StartIPAddress: to.StringPtr(first),
 						EndIPAddress:   to.StringPtr(last),
 					},
+				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzurePostgresServer.update(): user '"+key+"' is not part of any of the groups ", pg.Group, " required for postgres '"+pg.ResourceGroup+"/"+pg.Name+"'")
 				}
 			}
 		}
@@ -500,6 +529,10 @@ func (rc *AzureRedisCache) update() int {
 						EndIP:   to.StringPtr(last),
 					},
 				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureRedisCache.update(): user '"+key+"' is not part of any of the groups ", rc.Group, " required for redis cache '"+rc.ResourceGroup+"/"+rc.Name+"'")
+				}
 			}
 		}
 	}
@@ -586,6 +619,10 @@ func (cd *AzureCosmosDb) update() int {
 				ipRules = append(ipRules, documentdb.IPAddressOrRange{
 					IPAddressOrRange: to.StringPtr(ipval),
 				})
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureCosmosDb.update(): user '"+key+"' is not part of any of the groups ", cd.Group, " required for cosmosdb '"+cd.ResourceGroup+"/"+cd.Name+"'")
+				}
 			}
 		}
 	}
@@ -606,6 +643,10 @@ func (cd *AzureCosmosDb) update() int {
 			IPRules: &ipRules,
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureCosmosDb.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		if ret.Response().StatusCode == 412 {
 			// There is already an operation in progress which requires exclusive lock on this service. Please retry the operation after sometime.
@@ -618,7 +659,7 @@ func (cd *AzureCosmosDb) update() int {
 		log.Print("azure.AzureCosmosDb.update(): updated '" + cd.ResourceGroup + "/" + cd.Name + "'")
 	}
 
-	return ret.Response().StatusCode
+	return 0
 }
 
 func (cd *AzureCosmosDb) queueUpdate(me *AzureCosmosDb) {
