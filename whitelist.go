@@ -7,15 +7,6 @@ import (
 	"time"
 )
 
-/*
-- func init
-- func get
-- func add
-- func delete
-- func ttl
-- func updateResources
-*/
-
 type Whitelist struct {
 	List map[string]string // key = alecpinson123456, value = 123.123.123.123/32
 }
