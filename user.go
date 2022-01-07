@@ -11,15 +11,6 @@ import (
 	"time"
 )
 
-/*
-- name
-- employee_id
-- ip
-- func new
-- func whitelist
-- func unwhitelist
-*/
-
 type User struct {
 	key        string
 	name       string
