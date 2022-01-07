@@ -206,7 +206,7 @@ func (fd *AzureFrontDoor) update() int {
 
 	azfd := frontdoor.NewPoliciesClient(fd.SubscriptionId)
 	azfd.Authorizer, _ = a.authorize()
-	ret, err := azfd.CreateOrUpdate(context.Background(), fd.ResourceGroup, fd.PolicyName, frontdoor.WebApplicationFirewallPolicy{
+	_, err := azfd.CreateOrUpdate(context.Background(), fd.ResourceGroup, fd.PolicyName, frontdoor.WebApplicationFirewallPolicy{
 		Location: to.StringPtr("Global"),
 		WebApplicationFirewallPolicyProperties: &frontdoor.WebApplicationFirewallPolicyProperties{
 			PolicySettings: &frontdoor.PolicySettings{
@@ -233,7 +233,7 @@ func (fd *AzureFrontDoor) update() int {
 		log.Print("azure.AzureFrontDoor.update(): updated '" + fd.ResourceGroup + "/" + fd.PolicyName + "'")
 	}
 
-	return ret.Response().StatusCode
+	return 0
 }
 
 func (st *AzureStorageAccount) update() int {
@@ -618,7 +618,7 @@ func (cd *AzureCosmosDb) update() int {
 		log.Print("azure.AzureCosmosDb.update(): updated '" + cd.ResourceGroup + "/" + cd.Name + "'")
 	}
 
-	return ret.Response().StatusCode
+	return 0
 }
 
 func (cd *AzureCosmosDb) queueUpdate(me *AzureCosmosDb) {
