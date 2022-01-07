@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"sort"
 	"strconv"
 	"time"
 
@@ -128,11 +129,15 @@ func (r RedisConfiguration) getWhitelist() map[string]string {
 		log.Fatal("redis.getWhitelist(): ", err)
 	}
 
-	log.Println("redis.getWhitelist(): ## current ip whitelist ##")
 	for index, key := range keys {
 		ip := values[index]
-		log.Println("redis.getWhitelist(): " + key + " : " + ip)
 		wl[key] = ip
+	}
+
+	log.Println("redis.getWhitelist(): ## current ip whitelist ##")
+	sort.Strings(keys)
+	for _, key := range keys {
+		log.Println("redis.getWhitelist(): " + key + " : " + wl[key])
 	}
 	log.Println("redis.getWhitelist(): ##                      ##")
 
