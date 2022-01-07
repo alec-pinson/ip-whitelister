@@ -211,8 +211,8 @@ func (r RedisConfiguration) getGroups(user string) []string {
 
 // user caused api call
 func (r RedisConfiguration) apiCalled(user string) {
-	// all user to cause api calls every 60 seconds
-	_, err := redis.String(r.exec(2, "SETEX", user, 60, "."))
+	// all user to cause api calls every 120 seconds
+	_, err := redis.String(r.exec(2, "SETEX", user, 120, "."))
 	if err != nil {
 		log.Fatal("redis.apiCalled():", err)
 	}
