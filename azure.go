@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"regexp"
 	"strconv"
@@ -227,6 +228,10 @@ func (fd *AzureFrontDoor) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(rules, "", "\t")
+		log.Printf("azure.AzureFrontDoor.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureFrontDoor.update():", err)
 	} else {
@@ -308,6 +313,10 @@ func (st *AzureStorageAccount) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureStorageAccount.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureStorageAccount.update():", err)
 	} else {
@@ -352,6 +361,10 @@ func (kv *AzureKeyVault) update() int {
 			},
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureKeyVault.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		log.Print("azure.AzureKeyVault.update():", err)
 	} else {
@@ -606,6 +619,10 @@ func (cd *AzureCosmosDb) update() int {
 			IPRules: &ipRules,
 		},
 	})
+	if c.Debug {
+		prettyBody, _ := json.MarshalIndent(ipRules, "", "\t")
+		log.Printf("azure.AzureCosmosDb.update(): \n%v", string(prettyBody))
+	}
 	if err != nil {
 		if ret.Response().StatusCode == 412 {
 			// There is already an operation in progress which requires exclusive lock on this service. Please retry the operation after sometime.
