@@ -14,13 +14,14 @@ type RedisConfiguration struct {
 	Host            string       `yaml:"host"`
 	Port            int          `yaml:"port"`
 	Token           string       `yaml:"token"`
-	Connection      []redis.Conn // db0 (used for whitelist), db1 (used for groups cache)
+	Connection      []redis.Conn // db0 (used for whitelist), db1 (used for groups cache), db2 (used for api spam prevention)
 	Running         []bool       // concurrency check
 	CurrentDatabase int
 }
 
-var redisDBCount int = 2
+var redisDBCount int = 3
 
+// connect
 func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 	if rc.Host == "" || rc.Port == 0 || rc.Token == "" {
 		log.Print("redis.connect(): no redis database configuration was found")
@@ -60,6 +61,7 @@ func (r *RedisConfiguration) connect(rc RedisConfiguration) bool {
 	return true
 }
 
+// exec
 func (r RedisConfiguration) exec(db int, commandName string, args ...interface{}) (reply interface{}, err error) {
 	r.wait(db)
 	r.Running[db] = true
@@ -68,6 +70,7 @@ func (r RedisConfiguration) exec(db int, commandName string, args ...interface{}
 	return reply, err
 }
 
+// wait
 func (r RedisConfiguration) wait(db int) {
 	// redigo library doesn't support concurrency so we need to run single commands at a time
 	for ok := true; ok; ok = r.Running[db] {
@@ -164,6 +167,7 @@ func (r RedisConfiguration) addGroups(user string, groups []string) bool {
 	return r.setGroupExpiry(user)
 }
 
+// set group expiry
 func (r RedisConfiguration) setGroupExpiry(user string) bool {
 	_, err := r.exec(1, "EXPIRE", user, strconv.Itoa(c.TTL*3600+10))
 	if err != nil {
@@ -205,6 +209,30 @@ func (r RedisConfiguration) getGroups(user string) []string {
 	return g
 }
 
+// user caused api call
+func (r RedisConfiguration) apiCalled(user string) {
+	// all user to cause api calls every 120 seconds
+	_, err := redis.String(r.exec(2, "SETEX", user, 120, "."))
+	if err != nil {
+		log.Fatal("redis.apiCalled():", err)
+	}
+}
+
+// can user call api
+func (r RedisConfiguration) canCallApi(user string) bool {
+	exists, err := redis.Int(r.exec(2, "EXISTS", user))
+	if err != nil {
+		log.Fatal("redis.canCallApi():", err)
+		return false
+	}
+	if exists == 1 {
+		return false
+	} else {
+		return true
+	}
+}
+
+// keep alive
 func (r RedisConfiguration) keepAlive() {
 	// run every 5 minutes
 	for range time.Tick(time.Minute * 5) {
