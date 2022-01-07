@@ -135,6 +135,10 @@ func (fd *AzureFrontDoor) update() int {
 			// ip not within static whitelist range
 			if hasGroup(fd.Group, r.getGroups(key)) {
 				ips = append(ips, ipval)
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureFrontDoor.update(): user '"+key+"' is not part of any of the groups ", fd.Group, " required for frontdoor '"+fd.ResourceGroup+"/"+fd.PolicyName+"'")
+				}
 			}
 		}
 	}
@@ -271,6 +275,10 @@ func (st *AzureStorageAccount) update() int {
 						Action:           storage.ActionAllow,
 					})
 				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureStorageAccount.update(): user '"+key+"' is not part of any of the groups ", st.Group, " required for storage account '"+st.ResourceGroup+"/"+st.Name+"'")
+				}
 			}
 		}
 	}
@@ -338,6 +346,10 @@ func (kv *AzureKeyVault) update() int {
 				ipRules = append(ipRules, keyvault.IPRule{
 					Value: to.StringPtr(ipval),
 				})
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureKeyVault.update(): user '"+key+"' is not part of any of the groups ", kv.Group, " required for keyvault '"+kv.ResourceGroup+"/"+kv.Name+"'")
+				}
 			}
 		}
 	}
@@ -407,6 +419,10 @@ func (pg *AzurePostgresServer) update() int {
 						StartIPAddress: to.StringPtr(first),
 						EndIPAddress:   to.StringPtr(last),
 					},
+				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzurePostgresServer.update(): user '"+key+"' is not part of any of the groups ", pg.Group, " required for postgres '"+pg.ResourceGroup+"/"+pg.Name+"'")
 				}
 			}
 		}
@@ -513,6 +529,10 @@ func (rc *AzureRedisCache) update() int {
 						EndIP:   to.StringPtr(last),
 					},
 				}
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureRedisCache.update(): user '"+key+"' is not part of any of the groups ", rc.Group, " required for redis cache '"+rc.ResourceGroup+"/"+rc.Name+"'")
+				}
 			}
 		}
 	}
@@ -599,6 +619,10 @@ func (cd *AzureCosmosDb) update() int {
 				ipRules = append(ipRules, documentdb.IPAddressOrRange{
 					IPAddressOrRange: to.StringPtr(ipval),
 				})
+			} else {
+				if c.Debug {
+					log.Print("azure.AzureCosmosDb.update(): user '"+key+"' is not part of any of the groups ", cd.Group, " required for cosmosdb '"+cd.ResourceGroup+"/"+cd.Name+"'")
+				}
 			}
 		}
 	}
