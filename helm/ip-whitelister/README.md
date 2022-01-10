@@ -19,6 +19,11 @@ kubectl apply -f ip-whitelister-secrets.yaml
 
 3. Configure your `values.yaml`
 ```yaml
+image:
+  repository: alecpinson/ip-whitelister
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
 ingress:
   enabled: true
   className: ""
@@ -41,7 +46,7 @@ envFrom:
   - secretRef:
       name: ip-whitelister-secrets
 
-# config
+# mounted to /app/config/config.yaml
 config: |
   url: https://<same-as-above-ingress-host>
 
@@ -89,10 +94,42 @@ config: |
   ip_whitelist:
     - 85.0.0.0/24 # my company proxy addresses 1
     - 200.0.0.0/24 # my company proxy addresses 2
+
+# mounted to /app/config/resources/
+resource_configs:
+  - name: app1.yaml
+    config: |
+      resources:
+        - cloud: azure
+          type: cosmosdb
+          subscription_id: notreal-not-real-not-notreal
+          resource_group: app1-notreal-rg
+          name: app1-notrealcosmosdb
+          ip_whitelist: # https://docs.microsoft.com/en-us/azure/cosmos-db/how-to-configure-firewall#allow-requests-from-the-azure-portal
+            - 104.42.195.92
+            - 40.76.54.131
+            - 52.176.6.30
+            - 52.169.50.45
+            - 52.187.184.26
+  - name: app2.yaml
+    config: |
+      resources:
+        - cloud: azure
+          type: storageaccount
+          subscription_id: notreal-not-real-not-notreal
+          resource_group: app2-notreal-rg
+          name: app2notrealstorage
+          group:
+            - b111111a-b11a-111a-bb11-1a111aaa11a11 # group object id
+        - cloud: azure
+          type: keyvault
+          subscription_id: notreal-not-real-not-notreal
+          resource_group: app2-notreal-rg
+          name: app2notrealkeyvault
 ```
 
 4. Deploy to your Kubernetes cluster
 ```
-helm upgrade ip-whitelister https://github.com/alec-pinson/ip-whitelister/releases/download/v1.0.4/helm-chart-ip-whitelister-0.3.0.tgz --install --wait -f values.yaml
+helm upgrade ip-whitelister https://github.com/alec-pinson/ip-whitelister/releases/download/v1.0.8/helm-chart-ip-whitelister-0.4.0.tgz --install --wait -f values.yaml
 ```
 

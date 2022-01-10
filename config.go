@@ -74,6 +74,27 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 	a.RedisCache = nil
 	a.CosmosDb = nil
 
+	// load extra resource configs
+	resourceConfigs, err := ioutil.ReadDir("config/resources/")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var rc Configuration
+	for _, resourceConfig := range resourceConfigs {
+		if !resourceConfig.IsDir() {
+			yamlFile, err := ioutil.ReadFile("config/resources/" + resourceConfig.Name())
+			if err != nil {
+				log.Fatalf("config.load(): %v ", err)
+			}
+			err = yaml.Unmarshal(yamlFile, &rc)
+			if err != nil {
+				log.Fatalf("config.load(): %v", err)
+			}
+			c.Resources = append(c.Resources, rc.Resources...)
+		}
+	}
+
 	// load resources
 	for _, resource := range c.Resources {
 		switch strings.ToLower(resource.Cloud) {
@@ -192,6 +213,10 @@ func (c *Configuration) watchForConfigChanges() {
 	}()
 
 	err = watcher.Add(c.File)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = watcher.Add("config/resources")
 	if err != nil {
 		log.Fatal(err)
 	}
