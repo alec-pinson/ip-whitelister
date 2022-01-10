@@ -82,7 +82,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 
 	var rc Configuration
 	for _, resourceConfig := range resourceConfigs {
-		if !resourceConfig.IsDir() {
+		if !resourceConfig.IsDir() && resourceConfig.Name() != "..data" {
 			yamlFile, err := ioutil.ReadFile("config/resources/" + resourceConfig.Name())
 			if err != nil {
 				log.Fatalf("config.load(): %v ", err)
