@@ -1,0 +1,13 @@
+resources:
+  - cloud: azure
+    type: storageaccount
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: app2-notreal-rg
+    name: app2notrealstorage
+    group:
+      - b111111a-b11a-111a-bb11-1a111aaa11a11 # group object id
+  - cloud: azure
+    type: keyvault
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: app2-notreal-rg
+    name: app2notrealkeyvault
