@@ -48,6 +48,8 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /app/config
+            - name: config-resources
+              mountPath: /app/config/resources
           livenessProbe:
             httpGet:
               path: /
@@ -62,6 +64,9 @@ spec:
         - name: config
           configMap:
             name: {{ include "ip-whitelister.fullname" . }}
+        - name: config-resources
+          configMap:
+            name: {{ include "ip-whitelister.fullname" . }}-resources
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
