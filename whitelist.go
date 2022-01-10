@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"os"
 	"strings"
 	"time"
 )
@@ -16,7 +17,9 @@ func (*Whitelist) init() {
 	c.load()
 
 	// connect to redis database
-	r.connect(c.Redis)
+	if !r.connect(c.Redis) {
+		os.Exit(1)
+	}
 
 	// enable ttl check on whitelisted ips
 	go w.ttl()
