@@ -52,12 +52,13 @@ spec:
               mountPath: /app/config/resources
           livenessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /live
+              port: 8090
           readinessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /ready
+              port: 8090
+              initialDelaySeconds: 300
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
