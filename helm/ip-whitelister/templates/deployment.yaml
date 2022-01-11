@@ -58,7 +58,6 @@ spec:
             httpGet:
               path: /ready
               port: 8090
-              initialDelaySeconds: 300
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
