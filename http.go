@@ -19,6 +19,9 @@ import (
 
 type handle func(w http.ResponseWriter, req *http.Request) error
 
+var httpLive bool = true
+var httpReady bool = false
+
 type Error struct {
 	Code    int
 	Message string
@@ -150,8 +153,15 @@ func (a *Authentication) initAzure() {
 		Scopes: []string{"profile"},
 	}
 
+	http.Handle("/live", handle(livenessHandler))
+	http.Handle("/ready", handle(readinessHandler))
 	http.Handle("/callback", handle(callbackHandler))
 	http.Handle("/", handle(IndexHandler))
+	log.Fatal(http.ListenAndServe(":8090", nil))
+}
+
+func (a *Authentication) start() {
+	httpReady = true
 	log.Print("http.initAzure(): ip whitelister started")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -220,4 +230,28 @@ func IndexHandler(w http.ResponseWriter, req *http.Request) error {
 	}
 
 	return indexTempl.Execute(w, &data)
+}
+
+func livenessHandler(w http.ResponseWriter, req *http.Request) error {
+	var err error
+	if httpLive {
+		w.WriteHeader(200)
+		_, err = w.Write([]byte("ok"))
+	} else {
+		w.WriteHeader(500)
+		_, err = w.Write([]byte("not ok"))
+	}
+	return err
+}
+
+func readinessHandler(w http.ResponseWriter, req *http.Request) error {
+	var err error
+	if httpReady {
+		w.WriteHeader(200)
+		_, err = w.Write([]byte("ok"))
+	} else {
+		w.WriteHeader(500)
+		_, err = w.Write([]byte("not ok"))
+	}
+	return err
 }

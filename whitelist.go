@@ -24,11 +24,14 @@ func (*Whitelist) init() {
 	// enable ttl check on whitelisted ips
 	go w.ttl()
 
+	// initialize authentication
+	go h.init(c.Auth)
+
 	// update resources on startup
 	w.updateResources()
 
-	// initialize http/authentication
-	h.init(c.Auth)
+	// initialize http
+	h.start()
 }
 
 func (w *Whitelist) add(u *User) bool {
