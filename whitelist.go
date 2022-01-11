@@ -54,14 +54,14 @@ func (w *Whitelist) add(u *User) bool {
 			return ret
 		}
 		r.apiCalled(u.key)
-		w.updateResources()
+		go w.updateResources()
 		return true
 	} else {
 		// ip already whitelisted ... renew redis expiry time though
 		log.Println("whitelist.add(): no changes required for '" + u.key + "', ip already set to " + u.ip)
 		if r.canCallApi(u.key) {
 			r.apiCalled(u.key)
-			w.updateResources()
+			go w.updateResources()
 		}
 		r.setGroupExpiry(u.key)
 		return r.setIpExpiry(u.key)
