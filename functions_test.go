@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestChunkList(t *testing.T) {
 
@@ -22,6 +25,32 @@ func TestChunkList(t *testing.T) {
 		}
 	}
 
+}
+
+func TestGetIpList(t *testing.T) {
+	tests := []struct {
+		cidr         string
+		successFirst string
+		successLast  string
+		successAll   []string
+	}{
+		{"10.0.0.0/31", "10.0.0.0", "10.0.0.1", []string{"10.0.0.0", "10.0.0.1"}},
+		{"200.0.0.0/30", "200.0.0.0", "200.0.0.3", []string{"200.0.0.0", "200.0.0.1", "200.0.0.2", "200.0.0.3"}},
+		{"10.0.0.1", "10.0.0.1", "10.0.0.1", []string{"10.0.0.1"}},
+	}
+
+	for _, f := range tests {
+		first, last, all := getIpList(f.cidr)
+		if first != f.successFirst {
+			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, first, f.successFirst)
+		}
+		if last != f.successLast {
+			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, last, f.successLast)
+		}
+		if !reflect.DeepEqual(all, f.successAll) {
+			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, all, f.successAll)
+		}
+	}
 }
 
 func TestHasGroup(t *testing.T) {

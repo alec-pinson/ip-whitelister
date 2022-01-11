@@ -28,6 +28,10 @@ func chunkList(array []string, count int) [][]string {
 // function to get ips in subnet range
 func getIpList(cidr string) (first string, last string, all []string) {
 	var ret []string
+	if !strings.Contains(cidr, "/") {
+		// single ip
+		return cidr, cidr, []string{cidr}
+	}
 	// convert string to IPNet struct
 	_, ipv4Net, err := net.ParseCIDR(cidr)
 	if err != nil {
