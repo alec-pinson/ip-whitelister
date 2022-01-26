@@ -41,6 +41,11 @@ func (w *Whitelist) add(u *User) bool {
 		return false
 	}
 
+	ret := r.addGroups(u.key, u.groups)
+	if !ret {
+		return ret
+	}
+
 	if w.List[u.key] != u.cidr {
 		// need to update list
 		if w.List[u.key] == "" {
@@ -48,11 +53,7 @@ func (w *Whitelist) add(u *User) bool {
 		} else {
 			log.Println("whitelist.add(): updating whitelist for '" + u.key + "' from " + w.List[u.key] + " to " + u.ip)
 		}
-		ret := r.addIp(u.key, u.cidr)
-		if !ret {
-			return ret
-		}
-		ret = r.addGroups(u.key, u.groups)
+		ret = r.addIp(u.key, u.cidr)
 		if !ret {
 			return ret
 		}
@@ -62,12 +63,10 @@ func (w *Whitelist) add(u *User) bool {
 	} else {
 		// ip already whitelisted ... renew redis expiry time though
 		log.Println("whitelist.add(): no changes required for '" + u.key + "', ip already set to " + u.ip)
-		r.addGroups(u.key, u.groups)
 		if r.canCallApi(u.key) {
 			r.apiCalled(u.key)
 			go w.updateResources()
 		}
-		r.setGroupExpiry(u.key)
 		return r.setIpExpiry(u.key)
 	}
 }
