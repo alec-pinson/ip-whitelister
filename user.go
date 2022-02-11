@@ -16,7 +16,7 @@ type User struct {
 	name       string
 	employeeId string
 	ip         string
-	cidr       string   // microsoft saying without /32 can cause issues... dont believe them but w/e ticket id - 2106010050001687
+	cidr       string   // microsoft saying without /<netmask> can cause issues... dont believe them but w/e ticket id - 2106010050001687
 	groups     []string // list of object ids
 }
 
@@ -108,7 +108,10 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 		// u.ip = "1a00:12a1:1234:a123:a12a:12a1:1a12:1234" // ipv6 testing
 	}
 
-	u.cidr = u.ip + "/32"
+	u.cidr, err = addNetmask(u.ip)
+	if err != nil {
+		log.Fatal("user.new():", err)
+	}
 
 	log.Println("user.new(): authentication successful - " + u.name + " (" + u.employeeId + ") - " + u.ip)
 

@@ -92,3 +92,24 @@ func TestDelete(t *testing.T) {
 
 	DeleteTestRedis(t, testRedisInstance)
 }
+
+func TestInRange(t *testing.T) {
+	ips := []struct {
+		w         Whitelist
+		ip        string
+		whitelist []string
+		success   bool
+	}{
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "12.12.12.12/32", []string{}, false},
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "1.2.3.4/32", []string{"1.2.3.0/24"}, true},
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", []string{"1.2.3.0/24"}, false},
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1111/32", []string{}, false},
+	}
+
+	for _, i := range ips {
+		success := i.w.inRange(i.ip, i.whitelist)
+		if success != i.success {
+			t.Errorf("inRange for %v was incorrect, got %v, want %v", i, success, i.success)
+		}
+	}
+}
