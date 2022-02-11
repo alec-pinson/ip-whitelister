@@ -124,7 +124,7 @@ func (*Whitelist) inRange(ip string, whitelist []string) bool {
 			if subnet.Contains(netIp) {
 				// ip has already been whitelisted
 				if c.Debug {
-					log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+					log.Printf("whitelist.inRange: IPAddress value %v overlaps with already whitelisted value %v", ip, v)
 				}
 				return true
 			}
@@ -133,7 +133,7 @@ func (*Whitelist) inRange(ip string, whitelist []string) bool {
 			if v == ip {
 				// ip has already been whitelisted
 				if c.Debug {
-					log.Printf("whitelist.add(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
+					log.Printf("whitelist.inRange: IPAddress value %v overlaps with already whitelisted value %v", ip, v)
 				}
 			}
 		}

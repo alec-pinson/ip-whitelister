@@ -60,7 +60,7 @@ var indexTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
         url: 'https://graph.windows.net/me?api-version=1.6',
         dataType: 'json',
         success: function(data, status) {
-        	$('#displayName').text('Welcome ' + data.displayName + ', your IP (' + {{$.IPAddress}} + ') has been whitelisted.');
+        	$('#displayName').text('Welcome ' + data.displayName + ', your IP (' + {{$.IPAddress}} + ') has been whitelisted. Please note that IPv6 cannot be whitelisted on all resources.');
         },
         beforeSend: function(xhr, settings) {
           xhr.setRequestHeader('Authorization', 'Bearer ' + token.access_token);

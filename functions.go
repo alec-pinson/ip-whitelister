@@ -2,9 +2,18 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"log"
 	"net"
 	"strings"
+)
+
+type IpType int
+
+const (
+	Undefined IpType = iota
+	IpV4
+	IpV6
 )
 
 // function to split an array of strings
@@ -71,18 +80,39 @@ func hasGroup(resourceGroups []string, userGroups []string) bool {
 	return false
 }
 
-func isIpv4(cidr string) bool {
-	if !strings.Contains(cidr, "/") {
-		cidr = cidr + "/32"
-	}
-	_, ipv6Check, err := net.ParseCIDR(cidr)
-	if err != nil {
-		log.Fatal("functions.isIpv4():", err)
-	}
-
-	if ipv6Check.IP.To4() != nil {
+func isValidIpOrNetV4(cidr string) bool {
+	if ipType, err := ipVersion(cidr); err == nil && ipType == IpV4 {
 		return true
-	} else {
-		return false
 	}
+	return false
+}
+
+func ipVersion(ip string) (IpType, error) {
+	parsedIp := net.ParseIP(deleteNetmask(ip))
+	if parsedIp == nil {
+		log.Printf("functions.ipVersion() cannot parse ip == [%s]", ip)
+		return Undefined, errors.New("cannot parse ip")
+	}
+	if parsedIp.To4() != nil {
+		return IpV4, nil
+	}
+	return IpV6, nil
+}
+
+func addNetmask(ip string) (string, error) {
+	if strings.Contains(ip, "/") {
+		return ip, nil
+	}
+	ipVer, err := ipVersion(ip)
+	if err != nil {
+		return "", err
+	}
+	if ipVer == IpV4 {
+		return ip + "/32", nil
+	}
+	return ip + "/128", nil
+}
+
+func deleteNetmask(ip string) string {
+	return strings.Split(ip, "/")[0]
 }
