@@ -253,7 +253,9 @@ func (st *AzureStorageAccount) update() int {
 	for key, ipval := range w.List {
 		if !w.inRange(ipval, st.IPWhiteList) && isValidIpOrNetV4(ipval) {
 			// ip not within static whitelist range
-			ipval = deleteNetmask(ipval)
+			if strings.Contains(ipval, "/32") {
+				ipval = deleteNetmask(ipval)
+			}
 			if hasGroup(st.Group, r.getGroups(key)) {
 				if strings.Contains(ipval, "/31") {
 					// storage account doesnt support /31, have to split both ips
@@ -283,7 +285,9 @@ func (st *AzureStorageAccount) update() int {
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, st.IPWhiteList...) {
 		if isValidIpOrNetV4(ipval) {
-			ipval = deleteNetmask(ipval)
+			if strings.Contains(ipval, "/32") {
+				ipval = deleteNetmask(ipval)
+			}
 			if strings.Contains(ipval, "/31") {
 				// storage account doesnt support /31, have to split both ips
 				first, last, _ := getIpList(ipval)
