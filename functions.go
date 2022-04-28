@@ -114,8 +114,5 @@ func addNetmask(ip string) (string, error) {
 }
 
 func deleteNetmask(ip string) string {
-	if !strings.Contains(ip, "/32") {
-		return strings.Split(ip, "/")[0]
-	}
-	return ip
+	return strings.Split(ip, "/")[0]
 }
