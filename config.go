@@ -10,6 +10,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type SelectedConfigFile struct {
+	Config []Configuration
+}
+
 type Configuration struct {
 	File        string
 	Debug       bool
@@ -17,11 +21,18 @@ type Configuration struct {
 	Redis       RedisConfiguration      `yaml:"redis"`
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
+	Defaults    []Defaults              `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml":ttl"`
 }
 
+type Defaults struct {
+	SubscriptionId string `yaml:"subscription_id"`
+	ResourceGroup  string `yaml:"resource_group"`
+}
+
 type ResourceConfiguration struct {
+	Defaults       []string `yaml:"defaults"`
 	Cloud          string   `yaml:"cloud"`
 	Type           string   `yaml:"type"`
 	SubscriptionId string   `yaml:"subscription_id"`
@@ -81,6 +92,8 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 	}
 
 	var rc Configuration
+	var scf SelectedConfigFile
+	scf.Config = append(scf.Config, *c)
 	for _, resourceConfig := range resourceConfigs {
 		if !resourceConfig.IsDir() && resourceConfig.Name() != "..data" {
 			yamlFile, err := ioutil.ReadFile("config/resources/" + resourceConfig.Name())
@@ -91,71 +104,86 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 			if err != nil {
 				log.Fatalf("config.load(): %v", err)
 			}
-			c.Resources = append(c.Resources, rc.Resources...)
+			rc.File = resourceConfig.Name()
+			scf.Config = append(scf.Config, rc)
 		}
 	}
 
 	// load resources
-	for _, resource := range c.Resources {
-		switch strings.ToLower(resource.Cloud) {
-		case "azure":
-			switch strings.ToLower(resource.Type) {
-			case "frontdoor":
-				var fd AzureFrontDoor
-				fd.SubscriptionId = resource.SubscriptionId
-				fd.ResourceGroup = resource.ResourceGroup
-				fd.PolicyName = resource.PolicyName
-				fd.IPWhiteList = resource.IPWhiteList
-				fd.Group = resource.Group
-				fd.new(fd)
-			case "storageaccount":
-				var st AzureStorageAccount
-				st.SubscriptionId = resource.SubscriptionId
-				st.ResourceGroup = resource.ResourceGroup
-				st.Name = resource.Name
-				st.IPWhiteList = resource.IPWhiteList
-				st.Group = resource.Group
-				st.new(st)
-			case "keyvault":
-				var kv AzureKeyVault
-				kv.SubscriptionId = resource.SubscriptionId
-				kv.ResourceGroup = resource.ResourceGroup
-				kv.Name = resource.Name
-				kv.IPWhiteList = resource.IPWhiteList
-				kv.Group = resource.Group
-				kv.new(kv)
-			case "postgres":
-				var pg AzurePostgresServer
-				pg.SubscriptionId = resource.SubscriptionId
-				pg.ResourceGroup = resource.ResourceGroup
-				pg.Name = resource.Name
-				pg.IPWhiteList = resource.IPWhiteList
-				pg.Group = resource.Group
-				pg.new(pg)
-			case "redis":
-				var rc AzureRedisCache
-				rc.SubscriptionId = resource.SubscriptionId
-				rc.ResourceGroup = resource.ResourceGroup
-				rc.Name = resource.Name
-				rc.IPWhiteList = resource.IPWhiteList
-				rc.Group = resource.Group
-				rc.new(rc)
-			case "cosmosdb":
-				var cd AzureCosmosDb
-				cd.SubscriptionId = resource.SubscriptionId
-				cd.ResourceGroup = resource.ResourceGroup
-				cd.Name = resource.Name
-				cd.IPWhiteList = resource.IPWhiteList
-				cd.Group = resource.Group
-				cd.new(cd)
-			default:
-				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
+	for _, config := range scf.Config {
+		subId := ""
+		rg := ""
+		for _, resource := range config.Resources {
+			if resource.SubscriptionId == "" {
+				subId = config.Defaults[0].SubscriptionId
+			} else if resource.SubscriptionId != "" {
+				subId = resource.SubscriptionId
 			}
-		default:
-			log.Fatalln("config.load(): unsupported cloud '" + resource.Cloud + "'")
+			if resource.ResourceGroup == "" {
+				rg = config.Defaults[0].ResourceGroup
+			} else if resource.ResourceGroup != "" {
+				rg = resource.ResourceGroup
+			}
+			switch strings.ToLower(resource.Cloud) {
+			case "azure":
+				switch strings.ToLower(resource.Type) {
+
+				case "frontdoor":
+					var fd AzureFrontDoor
+					fd.SubscriptionId = subId
+					fd.ResourceGroup = rg
+					fd.PolicyName = resource.PolicyName
+					fd.IPWhiteList = resource.IPWhiteList
+					fd.Group = resource.Group
+					fd.new(fd)
+				case "storageaccount":
+					var st AzureStorageAccount
+					st.SubscriptionId = subId
+					st.ResourceGroup = rg
+					st.Name = resource.Name
+					st.IPWhiteList = resource.IPWhiteList
+					st.Group = resource.Group
+					st.new(st)
+				case "keyvault":
+					var kv AzureKeyVault
+					kv.SubscriptionId = subId
+					kv.ResourceGroup = rg
+					kv.Name = resource.Name
+					kv.IPWhiteList = resource.IPWhiteList
+					kv.Group = resource.Group
+					kv.new(kv)
+				case "postgres":
+					var pg AzurePostgresServer
+					pg.SubscriptionId = subId
+					pg.ResourceGroup = rg
+					pg.Name = resource.Name
+					pg.IPWhiteList = resource.IPWhiteList
+					pg.Group = resource.Group
+					pg.new(pg)
+				case "redis":
+					var rc AzureRedisCache
+					rc.SubscriptionId = subId
+					rc.ResourceGroup = rg
+					rc.Name = resource.Name
+					rc.IPWhiteList = resource.IPWhiteList
+					rc.Group = resource.Group
+					rc.new(rc)
+				case "cosmosdb":
+					var cd AzureCosmosDb
+					cd.SubscriptionId = subId
+					cd.ResourceGroup = rg
+					cd.Name = resource.Name
+					cd.IPWhiteList = resource.IPWhiteList
+					cd.Group = resource.Group
+					cd.new(cd)
+				default:
+					log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
+				}
+			default:
+				log.Fatalln("config.load(): unsupported cloud '" + resource.Cloud + "'")
+			}
 		}
 	}
-
 	if os.Getenv("CLIENT_SECRET") != "" {
 		c.Auth.ClientSecret = os.Getenv("CLIENT_SECRET")
 	}
