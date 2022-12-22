@@ -32,7 +32,6 @@ type Defaults struct {
 }
 
 type ResourceConfiguration struct {
-	Defaults       []string `yaml:"defaults"`
 	Cloud          string   `yaml:"cloud"`
 	Type           string   `yaml:"type"`
 	SubscriptionId string   `yaml:"subscription_id"`
