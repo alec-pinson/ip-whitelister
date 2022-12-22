@@ -1,0 +1,22 @@
+defaults:
+  - subscription_id: notreal-default-subscription
+    resource_group: notreal-default-rg
+
+# Resources without subscription and resource group below will use default subscription & resource group above
+resources:
+  - cloud: azure
+    type: storageaccount
+    name: app2notrealstorage
+    group:
+      - b111111a-b11a-111a-bb11-1a111aaa11a11 # group object id
+  - cloud: azure
+    type: keyvault
+    name: app2notrealkeyvault
+
+# This resource has subscription and resource group so will override the default 
+  - cloud: azure
+    type: frontdoor
+    subscription_id: notreal-not-real-not-notreal
+    resource_group: notreal-rg
+    policy_name: notrealpolicy
+    
