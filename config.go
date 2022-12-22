@@ -21,7 +21,7 @@ type Configuration struct {
 	Redis       RedisConfiguration      `yaml:"redis"`
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
-	Defaults    Defaults              `yaml:"defaults"`
+	Defaults    Defaults                `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml":ttl"`
 }
