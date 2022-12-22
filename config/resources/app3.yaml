@@ -1,6 +1,6 @@
 defaults:
-  - subscription_id: notreal-default-subscription
-    resource_group: notreal-default-rg
+  subscription_id: notreal-default-subscription
+  resource_group: notreal-default-rg
 
 # Resources without subscription and resource group below will use default subscription & resource group above
 resources:
@@ -19,4 +19,3 @@ resources:
     subscription_id: notreal-not-real-not-notreal
     resource_group: notreal-rg
     policy_name: notrealpolicy
-    

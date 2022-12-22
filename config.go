@@ -21,7 +21,7 @@ type Configuration struct {
 	Redis       RedisConfiguration      `yaml:"redis"`
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
-	Defaults    []Defaults              `yaml:"defaults"`
+	Defaults    Defaults              `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml":ttl"`
 }
@@ -114,12 +114,12 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		rg := ""
 		for _, resource := range config.Resources {
 			if resource.SubscriptionId == "" {
-				subId = config.Defaults[0].SubscriptionId
+				subId = config.Defaults.SubscriptionId
 			} else if resource.SubscriptionId != "" {
 				subId = resource.SubscriptionId
 			}
 			if resource.ResourceGroup == "" {
-				rg = config.Defaults[0].ResourceGroup
+				rg = config.Defaults.ResourceGroup
 			} else if resource.ResourceGroup != "" {
 				rg = resource.ResourceGroup
 			}

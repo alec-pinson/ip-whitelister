@@ -1,6 +1,6 @@
 defaults:
-  - subscription_id: notreal-default-subscription
-    resource_group: notreal-default-rg
+  subscription_id: notreal-default-subscription
+  resource_group: notreal-default-rg
     
 resources:
   - cloud: azure

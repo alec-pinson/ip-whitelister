@@ -20,8 +20,8 @@ redis:
   token: my-sup3r-comp1ic4t3d-s3cr3t-t0k3n
 
 defaults:
-  - subscription_id: notreal-default-subscription
-    resource_group: notreal-default-rg
+  subscription_id: notreal-default-subscription
+  resource_group: notreal-default-rg
 
 resources:
   - cloud: azure
