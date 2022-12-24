@@ -120,7 +120,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 			}
 			if resource.ResourceGroup == "" {
 				rg = config.Defaults.ResourceGroup
-			} else if resource.ResourceGroup != "" {
+			} else {
 				rg = resource.ResourceGroup
 			}
 			switch strings.ToLower(resource.Cloud) {
