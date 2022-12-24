@@ -115,7 +115,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		for _, resource := range config.Resources {
 			if resource.SubscriptionId == "" {
 				subId = config.Defaults.SubscriptionId
-			} else if resource.SubscriptionId != "" {
+			} else {
 				subId = resource.SubscriptionId
 			}
 			if resource.ResourceGroup == "" {
