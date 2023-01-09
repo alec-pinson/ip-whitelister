@@ -12,6 +12,11 @@ resource "azurerm_frontdoor_firewall_policy" "this" {
     https://xyz.com/ip-whitelister
   */
   lifecycle { ignore_changes = [custom_rule, managed_rule] }
+
+  tags = {
+    name       = var.name
+    created-by = "terraform"
+  }
 }
 
 output "azure_frontdoor_policy" {
