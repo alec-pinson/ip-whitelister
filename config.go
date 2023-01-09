@@ -23,7 +23,7 @@ type Configuration struct {
 	Resources   []ResourceConfiguration `yaml:"resources"`
 	Defaults    Defaults                `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
-	TTL         int                     `yaml":ttl"`
+	TTL         int                     `yaml:"ttl"`
 }
 
 type Defaults struct {

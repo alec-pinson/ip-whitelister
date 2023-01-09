@@ -25,7 +25,7 @@ type AzGetGroup struct {
 }
 
 type AzGroup struct {
-	ObjectId string `json:"objectId`
+	ObjectId string `json:"objectId"`
 }
 
 func (u *User) new(client *http.Client, req *http.Request) *User {
@@ -125,9 +125,10 @@ func (u *User) whitelist() {
 	}
 }
 
-func (u *User) unwhitelist() {
-	s := w.delete(u)
-	if s {
-		log.Println("user.unwhitelist(): Whitelisting for '" + u.ip + "' (" + u.name + ") has been removed")
-	}
-}
+// TODO: Currently unused
+// func (u *User) unwhitelist() {
+// 	s := w.delete(u)
+// 	if s {
+// 		log.Println("user.unwhitelist(): Whitelisting for '" + u.ip + "' (" + u.name + ") has been removed")
+// 	}
+// }

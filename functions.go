@@ -22,7 +22,7 @@ func chunkList(array []string, count int) [][]string {
 	lenb := lena/count + 1
 	b := make([][]string, lenb)
 
-	for i, _ := range b {
+	for i := range b {
 		start := i * count
 		end := start + count
 		if end > lena {
