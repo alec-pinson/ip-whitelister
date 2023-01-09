@@ -211,8 +211,13 @@ func (fd *AzureFrontDoor) update() int {
 
 	azfd := frontdoor.NewPoliciesClient(fd.SubscriptionId)
 	azfd.Authorizer, _ = a.authorize()
+
+	// Read current state of azure frontdoor
+	azfdget, _ := azfd.Get(context.Background(), fd.ResourceGroup, fd.PolicyName)
+
 	_, err := azfd.CreateOrUpdate(context.Background(), fd.ResourceGroup, fd.PolicyName, frontdoor.WebApplicationFirewallPolicy{
 		Location: to.StringPtr("Global"),
+		Tags:     azfdget.Tags, // Preserve tags for existing policies.
 		WebApplicationFirewallPolicyProperties: &frontdoor.WebApplicationFirewallPolicyProperties{
 			PolicySettings: &frontdoor.PolicySettings{
 				EnabledState:                  frontdoor.PolicyEnabledStateEnabled,
