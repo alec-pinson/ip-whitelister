@@ -1,4 +1,4 @@
-name: package helm chart
+name: lint helm chart
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ on:
       - main
 
 jobs:
-  release:
+  lint:
     runs-on: ubuntu-latest
     steps:
       -
@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
       -
         name: Install Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@v4
         with:
           version: v3.7.1
       -
@@ -30,18 +30,3 @@ jobs:
       -
         name: Template Helm chart
         run: helm template helm/ip-whitelister
-      -
-        if: github.ref == 'refs/heads/main' 
-        name: Package Helm chart
-        run: helm package helm/ip-whitelister && mv *.tgz helm-chart-`ls -1 *.tgz`
-      -
-        if: github.ref == 'refs/heads/main' 
-        name: Create release
-        uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          draft: true
-          prerelease: false
-          automatic_release_tag: helm-chart-update
-          files: |
-            *.tgz
