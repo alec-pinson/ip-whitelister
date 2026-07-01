@@ -20,7 +20,7 @@ kubectl apply -f ip-whitelister-secrets.yaml
 3. Configure your `values.yaml`
 ```yaml
 image:
-  repository: alecpinson/ip-whitelister
+  repository: ghcr.io/alec-pinson/ip-whitelister
   pullPolicy: IfNotPresent
   tag: "latest"
 
