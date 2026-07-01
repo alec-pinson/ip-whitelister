@@ -257,11 +257,11 @@ func (st *AzureStorageAccount) update() int {
 	var ipRules []storage.IPRule
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, st.IPWhiteList) && isIpv4(ipval) {
+		if !w.inRange(ipval, st.IPWhiteList) && isValidIpOrNetV4(ipval) {
 			// ip not within static whitelist range
 			if strings.Contains(ipval, "/32") {
-				// storage account requires /32 be removed...
-				ipval = strings.ReplaceAll(ipval, "/32", "")
+				// storage account wants a single IP without its /32 netmask
+				ipval = deleteNetmask(ipval)
 			}
 			if hasGroup(st.Group, r.getGroups(key)) {
 				if strings.Contains(ipval, "/31") {
@@ -291,10 +291,10 @@ func (st *AzureStorageAccount) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, st.IPWhiteList...) {
-		if isIpv4(ipval) {
+		if isValidIpOrNetV4(ipval) {
 			if strings.Contains(ipval, "/32") {
-				// storage account requires /32 be removed...
-				ipval = strings.ReplaceAll(ipval, "/32", "")
+				// storage account wants a single IP without its /32 netmask
+				ipval = deleteNetmask(ipval)
 			}
 			if strings.Contains(ipval, "/31") {
 				// storage account doesnt support /31, have to split both ips
@@ -346,7 +346,7 @@ func (kv *AzureKeyVault) update() int {
 	var ipRules []keyvault.IPRule
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, kv.IPWhiteList) && isIpv4(ipval) {
+		if !w.inRange(ipval, kv.IPWhiteList) && isValidIpOrNetV4(ipval) {
 			// ip not within static whitelist range
 			if hasGroup(kv.Group, r.getGroups(key)) {
 				ipRules = append(ipRules, keyvault.IPRule{
@@ -362,7 +362,7 @@ func (kv *AzureKeyVault) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, kv.IPWhiteList...) {
-		if isIpv4(ipval) {
+		if isValidIpOrNetV4(ipval) {
 			ipRules = append(ipRules, keyvault.IPRule{
 				Value: to.StringPtr(ipval),
 			})
@@ -416,7 +416,7 @@ func (pg *AzurePostgresServer) update() int {
 	newRules := make(map[string]postgresql.FirewallRule)
 	// ip whitelist
 	for key, cidr := range w.List {
-		if !w.inRange(cidr, pg.IPWhiteList) && isIpv4(cidr) {
+		if !w.inRange(cidr, pg.IPWhiteList) && isValidIpOrNetV4(cidr) {
 			// ip not within static whitelist range
 			if hasGroup(pg.Group, r.getGroups(key)) {
 				first, last, _ := getIpList(cidr)
@@ -435,7 +435,7 @@ func (pg *AzurePostgresServer) update() int {
 	}
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, pg.IPWhiteList...) {
-		if isIpv4(cidr) {
+		if isValidIpOrNetV4(cidr) {
 			first, last, _ := getIpList(cidr)
 			// reg expression for creating key
 			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
@@ -525,7 +525,7 @@ func (rc *AzureRedisCache) update() int {
 	newRules := make(map[string]redis.FirewallRule)
 	// ip whitelist
 	for key, cidr := range w.List {
-		if !w.inRange(cidr, rc.IPWhiteList) && isIpv4(cidr) {
+		if !w.inRange(cidr, rc.IPWhiteList) && isValidIpOrNetV4(cidr) {
 			// ip not within static whitelist range
 			if hasGroup(rc.Group, r.getGroups(key)) {
 				first, last, _ := getIpList(cidr)
@@ -544,7 +544,7 @@ func (rc *AzureRedisCache) update() int {
 	}
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, rc.IPWhiteList...) {
-		if isIpv4(cidr) {
+		if isValidIpOrNetV4(cidr) {
 			first, last, _ := getIpList(cidr)
 			// reg expression for creating key
 			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
@@ -619,7 +619,7 @@ func (cd *AzureCosmosDb) update() int {
 	var ipRules []documentdb.IPAddressOrRange
 	// ip whitelist
 	for key, ipval := range w.List {
-		if !w.inRange(ipval, cd.IPWhiteList) && isIpv4(ipval) {
+		if !w.inRange(ipval, cd.IPWhiteList) && isValidIpOrNetV4(ipval) {
 			// ip not within static whitelist range
 			if hasGroup(cd.Group, r.getGroups(key)) {
 				ipRules = append(ipRules, documentdb.IPAddressOrRange{
@@ -635,7 +635,7 @@ func (cd *AzureCosmosDb) update() int {
 
 	// static ip whitelist
 	for _, ipval := range append(c.IPWhiteList, cd.IPWhiteList...) {
-		if isIpv4(ipval) {
+		if isValidIpOrNetV4(ipval) {
 			ipRules = append(ipRules, documentdb.IPAddressOrRange{
 				IPAddressOrRange: to.StringPtr(ipval),
 			})

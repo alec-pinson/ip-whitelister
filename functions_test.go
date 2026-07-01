@@ -76,23 +76,95 @@ func TestHasGroup(t *testing.T) {
 
 }
 
-func TestIsIpv4(t *testing.T) {
-
+func TestIsValidIpOrNetV4(t *testing.T) {
 	tests := []struct {
 		ip      string
 		success bool
 	}{
 		{"12.12.12.12/32", true},
 		{"1.2.3.4/32", true},
+		{"1.2.3.4", true},
+		{"1.2.3.0/24", true},
 		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", false},
-		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111/32", false},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111", false},
+		{"not-an-ip", false},
 	}
 
 	for _, f := range tests {
-		success := isIpv4(f.ip)
+		success := isValidIpOrNetV4(f.ip)
 		if success != f.success {
-			t.Errorf("isIpv4 for %v was incorrect, got %v, want %v", f, success, f.success)
+			t.Errorf("isValidIpOrNetV4 for %v was incorrect, got %v, want %v", f, success, f.success)
+		}
+	}
+}
+
+func TestIpVersion(t *testing.T) {
+	tests := []struct {
+		ip      string
+		version IpType
+	}{
+		{"12.12.12.12/32", IpV4},
+		{"1.2.3.4", IpV4},
+		{"1.2.3.0/24", IpV4},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", IpV6},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/128", IpV6},
+		{"2a00:11c7:1234:b801:a16e:12af:42:11", IpV6},
+	}
+
+	for _, f := range tests {
+		version, err := ipVersion(f.ip)
+		if err != nil {
+			t.Errorf("ipVersion for %v returned unexpected error %v", f, err)
+		}
+		if version != f.version {
+			t.Errorf("ipVersion for %v was incorrect, got %v, want %v", f, version, f.version)
 		}
 	}
 
+	if _, err := ipVersion("not-an-ip"); err == nil {
+		t.Errorf("ipVersion for an unparseable value should return an error")
+	}
+}
+
+func TestAddNetmask(t *testing.T) {
+	tests := []struct {
+		ip         string
+		ipWithMask string
+	}{
+		{"12.12.12.12/32", "12.12.12.12/32"},
+		{"1.2.3.4", "1.2.3.4/32"},
+		{"1.2.3.0/24", "1.2.3.0/24"},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", "2a00:11c7:1234:b801:a16e:12af:5e42:1100/32"},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111", "2a00:11c7:1234:b801:a16e:12af:5e42:1111/128"},
+	}
+
+	for _, f := range tests {
+		ipWithMask, err := addNetmask(f.ip)
+		if err != nil {
+			t.Errorf("addNetmask for %v returned unexpected error %v", f, err)
+		}
+		if ipWithMask != f.ipWithMask {
+			t.Errorf("addNetmask for %v was incorrect, got %v, want %v", f, ipWithMask, f.ipWithMask)
+		}
+	}
+}
+
+func TestDeleteNetmask(t *testing.T) {
+	tests := []struct {
+		ip            string
+		ipWithoutMask string
+	}{
+		{"12.12.12.12/32", "12.12.12.12"},
+		{"1.2.3.4", "1.2.3.4"},
+		{"1.2.3.0/24", "1.2.3.0"},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", "2a00:11c7:1234:b801:a16e:12af:5e42:1100"},
+		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111", "2a00:11c7:1234:b801:a16e:12af:5e42:1111"},
+	}
+
+	for _, f := range tests {
+		ipWithoutMask := deleteNetmask(f.ip)
+		if ipWithoutMask != f.ipWithoutMask {
+			t.Errorf("deleteNetmask for %v was incorrect, got %v, want %v", f, ipWithoutMask, f.ipWithoutMask)
+		}
+	}
 }

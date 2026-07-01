@@ -2,9 +2,18 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"log"
 	"net"
 	"strings"
+)
+
+type IpType int
+
+const (
+	Undefined IpType = iota
+	IpV4
+	IpV6
 )
 
 // function to split an array of strings
@@ -71,18 +80,42 @@ func hasGroup(resourceGroups []string, userGroups []string) bool {
 	return false
 }
 
-func isIpv4(cidr string) bool {
-	if !strings.Contains(cidr, "/") {
-		cidr = cidr + "/32"
-	}
-	_, ipv6Check, err := net.ParseCIDR(cidr)
-	if err != nil {
-		log.Fatal("functions.isIpv4():", err)
-	}
+// isValidIpOrNetV4 reports whether ip is a parseable IPv4 address or IPv4 CIDR.
+func isValidIpOrNetV4(ip string) bool {
+	ipType, err := ipVersion(ip)
+	return err == nil && ipType == IpV4
+}
 
-	if ipv6Check.IP.To4() != nil {
-		return true
-	} else {
-		return false
+// ipVersion returns whether ip (with or without a netmask) is IPv4 or IPv6.
+func ipVersion(ip string) (IpType, error) {
+	parsed := net.ParseIP(deleteNetmask(ip))
+	if parsed == nil {
+		log.Printf("functions.ipVersion(): cannot parse ip '%s'", ip)
+		return Undefined, errors.New("cannot parse ip '" + ip + "'")
 	}
+	if parsed.To4() != nil {
+		return IpV4, nil
+	}
+	return IpV6, nil
+}
+
+// addNetmask appends the single-host netmask (/32 for IPv4, /128 for IPv6) when
+// ip has none. IPs that already carry a netmask are returned unchanged.
+func addNetmask(ip string) (string, error) {
+	if strings.Contains(ip, "/") {
+		return ip, nil
+	}
+	ipType, err := ipVersion(ip)
+	if err != nil {
+		return "", err
+	}
+	if ipType == IpV4 {
+		return ip + "/32", nil
+	}
+	return ip + "/128", nil
+}
+
+// deleteNetmask strips any /netmask suffix, returning just the address.
+func deleteNetmask(ip string) string {
+	return strings.Split(ip, "/")[0]
 }

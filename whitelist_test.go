@@ -92,3 +92,28 @@ func TestDelete(t *testing.T) {
 
 	DeleteTestRedis(t, testRedisInstance)
 }
+
+func TestInRange(t *testing.T) {
+	tests := []struct {
+		w         Whitelist
+		ip        string
+		whitelist []string
+		success   bool
+	}{
+		// not in the (empty) static whitelist
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "12.12.12.12/32", []string{}, false},
+		// covered by a static CIDR range
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "1.2.3.4/32", []string{"1.2.3.0/24"}, true},
+		// ipv6 is not matched against an ipv4 range
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", []string{"1.2.3.0/24"}, false},
+		// ipv6 with an empty static whitelist
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1111/32", []string{}, false},
+	}
+
+	for _, f := range tests {
+		success := f.w.inRange(f.ip, f.whitelist)
+		if success != f.success {
+			t.Errorf("inRange for %v was incorrect, got %v, want %v", f, success, f.success)
+		}
+	}
+}
