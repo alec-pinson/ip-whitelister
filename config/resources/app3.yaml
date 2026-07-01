@@ -1,0 +1,14 @@
+# 'defaults' apply to any resource in this file that leaves the value blank.
+# Handy when every resource in a file shares the same subscription / resource group.
+defaults:
+  subscription_id: notreal-not-real-not-notreal
+  resource_group: app3-notreal-rg
+
+resources:
+  - cloud: azure
+    type: storageaccount
+    name: app3notrealstorage # inherits subscription_id + resource_group from defaults
+  - cloud: azure
+    type: keyvault
+    name: app3notrealkeyvault
+    resource_group: app3-override-rg # a per-resource value overrides the default

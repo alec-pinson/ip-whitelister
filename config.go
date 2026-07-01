@@ -17,8 +17,16 @@ type Configuration struct {
 	Redis       RedisConfiguration      `yaml:"redis"`
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
+	Defaults    Defaults                `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml:"ttl"`
+}
+
+// Defaults are per-config-file fallback values applied to any resource in that
+// file that leaves the corresponding field blank.
+type Defaults struct {
+	SubscriptionId string `yaml:"subscription_id"`
+	ResourceGroup  string `yaml:"resource_group"`
 }
 
 type ResourceConfiguration struct {
@@ -33,6 +41,19 @@ type ResourceConfiguration struct {
 }
 
 var defaultConfigFile = "config/config.yaml"
+
+// applyDefaults fills in any per-resource subscription_id / resource_group that
+// were left blank with the file-level defaults.
+func applyDefaults(resources []ResourceConfiguration, d Defaults) {
+	for i := range resources {
+		if resources[i].SubscriptionId == "" {
+			resources[i].SubscriptionId = d.SubscriptionId
+		}
+		if resources[i].ResourceGroup == "" {
+			resources[i].ResourceGroup = d.ResourceGroup
+		}
+	}
+}
 
 func (c *Configuration) load(reload ...bool) *Configuration {
 	if strings.ToLower(os.Getenv("DEBUG")) == "true" {
@@ -80,9 +101,12 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		log.Fatal(err)
 	}
 
-	var rc Configuration
+	// apply the main config file's defaults to its own resources
+	applyDefaults(c.Resources, c.Defaults)
+
 	for _, resourceConfig := range resourceConfigs {
 		if !resourceConfig.IsDir() && resourceConfig.Name() != "..data" {
+			var rc Configuration
 			yamlFile, err := ioutil.ReadFile("config/resources/" + resourceConfig.Name())
 			if err != nil {
 				log.Fatalf("config.load(): %v ", err)
@@ -91,6 +115,8 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 			if err != nil {
 				log.Fatalf("config.load(): %v", err)
 			}
+			// each resource file can define its own defaults
+			applyDefaults(rc.Resources, rc.Defaults)
 			c.Resources = append(c.Resources, rc.Resources...)
 		}
 	}
