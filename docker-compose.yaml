@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   ip-whitelister:
-    image: alecpinson/ip-whitelister:pr-1
+    image: ghcr.io/alec-pinson/ip-whitelister:latest
     volumes:
       - ./config:/app/config:ro
     ports:

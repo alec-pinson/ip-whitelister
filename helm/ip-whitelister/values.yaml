@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: alecpinson/ip-whitelister
+  repository: ghcr.io/alec-pinson/ip-whitelister
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
