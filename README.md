@@ -39,3 +39,11 @@ https://hub.docker.com/r/alecpinson/ip-whitelister
 
 ### Helm
 See [README](helm/ip-whitelister/README.md)
+
+## License
+IP Whitelister is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+- **Free for noncommercial use** — homelabs, personal projects, students, nonprofits, educational and government institutions.
+- **Commercial/company use requires a paid license.** If your organisation wants to use IP Whitelister, please get in touch to arrange a commercial licence.
+
+Copyright © 2021-2026 Alec Pinson.
