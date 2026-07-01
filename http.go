@@ -75,9 +75,9 @@ var indexTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
 func (h handle) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
-			// if c.Debug {
-			// 	log.Printf("Handler panic: %v", r)
-			// }
+			if c.Debug {
+				log.Printf("Handler panic: %v", r)
+			}
 		}
 	}()
 	if err := h(w, req); err != nil {

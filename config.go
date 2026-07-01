@@ -18,7 +18,7 @@ type Configuration struct {
 	Auth        Authentication          `yaml:"auth"`
 	Resources   []ResourceConfiguration `yaml:"resources"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
-	TTL         int                     `yaml":ttl"`
+	TTL         int                     `yaml:"ttl"`
 }
 
 type ResourceConfiguration struct {
