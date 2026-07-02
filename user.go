@@ -101,8 +101,14 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 // testing), its cidr, and the whitelist key derived from identity. When
 // identity is empty the key falls back to the client IP.
 func (u *User) finishUser(identity string, req *http.Request) error {
-	// get ip
-	u.ip = req.Header.Get("X-Azure-Clientip")
+	// get ip from the configured trusted header. Azure Front Door sets
+	// X-Azure-Clientip (the default when ip_header is unset); no-auth mode uses
+	// ip_header (e.g. Cf-Connecting-Ip). Fall back to RemoteAddr when absent.
+	ipHeader := c.Auth.IPHeader
+	if ipHeader == "" {
+		ipHeader = "X-Azure-Clientip"
+	}
+	u.ip = req.Header.Get(ipHeader)
 	if u.ip == "" {
 		var err error
 		u.ip, _, err = net.SplitHostPort(req.RemoteAddr)
@@ -123,7 +129,8 @@ func (u *User) finishUser(identity string, req *http.Request) error {
 	u.cidr = cidr
 
 	// Create our 'key' by removing spaces, lower-casing and stripping special
-	// characters. Fall back to the IP when there is no identity (no-auth mode).
+	// characters. Fall back to the IP when there is no identity (no-auth mode);
+	// the OAuth path always supplies a non-empty identity.
 	if identity == "" {
 		identity = u.ip
 	}

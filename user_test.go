@@ -47,6 +47,8 @@ func fakeGraphClient(me, memberOf fakeResponse) *http.Client {
 
 func TestUserNew(t *testing.T) {
 	c.Debug = false
+	c.Auth.IPHeader = "" // azure path reads X-Azure-Clientip
+	defer func() { c.Auth.IPHeader = "" }()
 
 	tests := []struct {
 		name         string
@@ -173,11 +175,13 @@ func TestUserNewFromRequest(t *testing.T) {
 	c.Debug = false
 	c.Auth.Header = "Cf-Access-Authenticated-User-Email"
 	defer func() { c.Auth.Header = "" }()
+	c.Auth.IPHeader = "Cf-Connecting-Ip"
+	defer func() { c.Auth.IPHeader = "" }()
 
 	tests := []struct {
 		name       string
 		header     string // Cf-Access-Authenticated-User-Email value ("" = not set)
-		clientIP   string // X-Azure-Clientip value ("" = not set)
+		clientIP   string // Cf-Connecting-Ip value ("" = not set)
 		remoteAddr string
 		wantName   string
 		wantKey    string
@@ -221,7 +225,7 @@ func TestUserNewFromRequest(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			req.RemoteAddr = f.remoteAddr
 			if f.clientIP != "" {
-				req.Header.Set("X-Azure-Clientip", f.clientIP)
+				req.Header.Set("Cf-Connecting-Ip", f.clientIP)
 			}
 			if f.header != "" {
 				req.Header.Set("Cf-Access-Authenticated-User-Email", f.header)

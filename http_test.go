@@ -231,10 +231,12 @@ func TestNoAuthIndexHandler(t *testing.T) {
 	c.TTL = 24
 	c.Auth.Header = "Cf-Access-Authenticated-User-Email"
 	defer func() { c.Auth.Header = "" }()
+	c.Auth.IPHeader = "Cf-Connecting-Ip"
+	defer func() { c.Auth.IPHeader = "" }()
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Cf-Access-Authenticated-User-Email", "alice@example.com")
-	req.Header.Set("X-Azure-Clientip", "203.0.113.7")
+	req.Header.Set("Cf-Connecting-Ip", "203.0.113.7")
 	rr := httptest.NewRecorder()
 
 	if err := noAuthIndexHandler(rr, req); err != nil {

@@ -73,6 +73,9 @@ func applyAuthDefaults(a Authentication) Authentication {
 		if a.Header == "" {
 			a.Header = "Cf-Access-Authenticated-User-Email"
 		}
+		if a.IPHeader == "" {
+			a.IPHeader = "Cf-Connecting-Ip"
+		}
 	}
 	return a
 }

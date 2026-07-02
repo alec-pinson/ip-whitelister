@@ -134,6 +134,7 @@ var (
 type Authentication struct {
 	Type         string `yaml:"type"`
 	Header       string `yaml:"header"`
+	IPHeader     string `yaml:"ip_header"`
 	TenantId     string `yaml:"tenant_id"`
 	ClientId     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
@@ -200,7 +201,7 @@ func noAuthIndexHandler(w http.ResponseWriter, req *http.Request) error {
 	return noAuthTempl.Execute(w, &data)
 }
 
-func (a *Authentication) initNoAuth() {
+func (*Authentication) initNoAuth() {
 	http.Handle("/live", handle(livenessHandler))
 	http.Handle("/ready", handle(readinessHandler))
 	http.Handle("/", handle(noAuthIndexHandler))
@@ -209,7 +210,7 @@ func (a *Authentication) initNoAuth() {
 
 func (a *Authentication) start() {
 	httpReady = true
-	log.Print("http.initAzure(): ip whitelister started")
+	log.Print("http.start(): ip whitelister started")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 

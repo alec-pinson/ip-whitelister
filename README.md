@@ -95,7 +95,8 @@ proxy handle authentication:
 ```yaml
 auth:
   type: none   # alias: disabled
-  # header: Cf-Access-Authenticated-User-Email   # trusted identity header (default shown)
+  # header:    Cf-Access-Authenticated-User-Email   # trusted identity header (default shown)
+  # ip_header: Cf-Connecting-Ip                      # trusted client-IP header (default shown)
 ```
 
 In this mode any request to `/` immediately whitelists the caller's IP and shows
@@ -103,6 +104,12 @@ a confirmation page — there is no OAuth redirect or callback. The whitelist
 entry is keyed on the identity the proxy supplies in the configured `header`
 (default `Cf-Access-Authenticated-User-Email`); if that header is absent the
 entry is keyed on the client IP instead.
+
+The client IP is read from the `ip_header` request header (default
+`Cf-Connecting-Ip`, which Cloudflare sets). **Your proxy MUST set this header to
+the real client IP and strip any client-supplied value** — otherwise an
+authenticated user could spoof it to whitelist an arbitrary address. For Azure
+Front Door use `ip_header: X-Azure-Clientip`.
 
 Because AzureAD group membership is unavailable without OAuth, **group-scoped
 resources are skipped** in this mode — only resources without a `group:` filter
