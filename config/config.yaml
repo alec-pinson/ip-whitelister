@@ -19,6 +19,15 @@ redis:
   port: 6379
   token: my-sup3r-comp1ic4t3d-s3cr3t-t0k3n
 
+# UniFi gateway for the 'unifi' provider (single gateway).
+# Username/Password can also be set via env vars UNIFI_USERNAME / UNIFI_PASSWORD.
+# Host contains 'notreal' so the sample config never touches a real gateway.
+unifi:
+  host: https://notreal.gateway
+  site: default
+  username: ip-whitelister
+  password: notrealnotrealnotreal
+
 resources:
   - cloud: azure
     type: frontdoor
@@ -62,6 +71,9 @@ resources:
       - 52.176.6.30
       - 52.169.50.45
       - 52.187.184.26
+  - cloud: unifi
+    type: networklist
+    name: ip-whitelister # the UniFi Network List to keep in sync
 
 # This whitelist will be applied to all resources and should be static non-human IPs only
 ip_whitelist:

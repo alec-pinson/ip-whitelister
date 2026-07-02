@@ -112,6 +112,11 @@ func (*Whitelist) updateResources() bool {
 	for _, cd := range a.CosmosDb {
 		cd.update()
 	}
+	if unifiEnabled(c.Unifi) {
+		for _, nl := range u.NetworkList {
+			nl.update()
+		}
+	}
 	return true
 }
 
