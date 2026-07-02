@@ -65,6 +65,9 @@ func TestHasGroup(t *testing.T) {
 		{[]string{"group1", "group2"}, []string{"group6", "group2"}, true},
 		{[]string{"group1"}, []string{"group9", "group10", "group11"}, false},
 		{[]string{"group1", "group2", "group3", "group4"}, []string{"group5"}, false},
+		// a resource with no group restriction (nil) is open to everyone
+		{nil, []string{"group1"}, true},
+		{nil, nil, true},
 	}
 
 	for _, f := range groups {
@@ -146,6 +149,13 @@ func TestAddNetmask(t *testing.T) {
 		if ipWithMask != f.ipWithMask {
 			t.Errorf("addNetmask for %v was incorrect, got %v, want %v", f, ipWithMask, f.ipWithMask)
 		}
+	}
+}
+
+func TestAddNetmaskInvalid(t *testing.T) {
+	// an unparseable address cannot have a netmask inferred and must error
+	if _, err := addNetmask("not-an-ip"); err == nil {
+		t.Errorf("addNetmask for an unparseable value should return an error")
 	}
 }
 
