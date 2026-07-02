@@ -45,7 +45,6 @@ type unifiClient interface {
 type unifiApplicationClient struct {
 	cfg  UnifiConfiguration
 	http *http.Client
-	csrf string
 }
 
 // newUnifiClient builds the real unifiClient implementation. TLS verification is
@@ -69,27 +68,32 @@ func (uc *unifiApplicationClient) base() string {
 	return strings.TrimRight(uc.cfg.Host, "/") + "/proxy/network/api/s/" + uc.cfg.Site + "/rest/firewallgroup"
 }
 
-func (uc *unifiApplicationClient) login() error {
+// login authenticates against the gateway and returns the CSRF token. The token
+// is returned (not stored on the struct) so concurrent update() calls sharing
+// this client don't clobber each other's token — a data race that caused
+// intermittent 403s. The session cookie lives in the shared cookiejar, which is
+// safe for concurrent use.
+func (uc *unifiApplicationClient) login() (string, error) {
 	body, _ := json.Marshal(map[string]string{"username": uc.cfg.Username, "password": uc.cfg.Password})
 	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(uc.cfg.Host, "/")+"/api/auth/login", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := uc.http.Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unifi login failed: status %d", resp.StatusCode)
+		return "", fmt.Errorf("unifi login failed: status %d", resp.StatusCode)
 	}
-	uc.csrf = resp.Header.Get("X-CSRF-Token")
-	return nil
+	return resp.Header.Get("X-CSRF-Token"), nil
 }
 
 func (uc *unifiApplicationClient) getFirewallGroup(name string) (unifiFirewallGroup, error) {
-	if err := uc.login(); err != nil {
+	// GET only needs the session cookie from the jar, not the CSRF token.
+	if _, err := uc.login(); err != nil {
 		return unifiFirewallGroup{}, err
 	}
 	req, err := http.NewRequest(http.MethodGet, uc.base(), nil)
@@ -119,7 +123,8 @@ func (uc *unifiApplicationClient) getFirewallGroup(name string) (unifiFirewallGr
 }
 
 func (uc *unifiApplicationClient) updateFirewallGroup(g unifiFirewallGroup) error {
-	if err := uc.login(); err != nil {
+	csrf, err := uc.login()
+	if err != nil {
 		return err
 	}
 	body, _ := json.Marshal(g)
@@ -128,7 +133,7 @@ func (uc *unifiApplicationClient) updateFirewallGroup(g unifiFirewallGroup) erro
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-CSRF-Token", uc.csrf)
+	req.Header.Set("X-CSRF-Token", csrf)
 	resp, err := uc.http.Do(req)
 	if err != nil {
 		return err
