@@ -33,6 +33,9 @@ handing out standing firewall exceptions or VPN access.
 - Redis Cache
 - Cosmos DB
 
+**UniFi:**
+- Network List (firewall address-group) — see [UniFi](#unifi) below
+
 ### Group support
 
 Each resource can specify a list of AzureAD group object IDs. A user is only
@@ -61,6 +64,7 @@ Key top-level options:
 | `ttl`          | Whitelist lifetime in hours (default `24`).                        |
 | `auth`         | AzureAD tenant/client credentials (`type: azure`).                 |
 | `redis`        | Redis `host`, `port`, and `token`.                                 |
+| `unifi`        | UniFi gateway connection + credentials (see [UniFi](#unifi)).       |
 | `resources`    | List of cloud resources to whitelist against (see example config). |
 | `ip_whitelist` | Static, always-applied IPs — for non-human/proxy addresses only.   |
 
@@ -73,11 +77,47 @@ Sensitive values can be injected via env vars, overriding the YAML:
 | `CONFIG_FILE`   | Path to the config file.                              |
 | `CLIENT_SECRET` | `auth.client_secret`.                                 |
 | `REDIS_TOKEN`   | `redis.token`.                                        |
+| `UNIFI_USERNAME`| `unifi.username`.                                     |
+| `UNIFI_PASSWORD`| `unifi.password`.                                     |
 | `DEBUG`         | Set to `true` for verbose debug logging.              |
 
-> **Note:** as a safety guard, resource updates are a no-op while the auth
-> `tenant_id` is left as the placeholder value from the sample config, so the
-> dummy config never touches real cloud resources.
+> **Note:** as a safety guard, Azure resource updates are a no-op while the auth
+> `tenant_id` is left as the placeholder value from the sample config, and UniFi
+> syncing is skipped while `unifi.host` is empty or contains `notreal`, so the
+> dummy config never touches real cloud resources or a real gateway.
+
+### UniFi
+
+The `unifi` provider keeps a UniFi **Network List** (a firewall address-group) in
+sync with the current whitelist. Point a port-forward rule's **From: List** at
+that Network List and its allowed source IPs will track whitelisted users — the
+app only ever manages the list's members, not the rule itself.
+
+Configure the single gateway once, then add a `networklist` resource per list:
+
+```yaml
+unifi:
+  host: https://192.168.1.1   # gateway base URL
+  site: default               # UniFi site name
+  username: ip-whitelister    # dedicated limited local account (not your admin login)
+  password: changeme          # or via env var UNIFI_PASSWORD
+
+resources:
+  - cloud: unifi
+    type: networklist
+    name: ip-whitelister      # the Network List to manage
+    group:                    # optional: only whitelist users in these AzureAD groups
+      - <group-object-id>
+    ip_whitelist:             # optional: per-list static entries
+      - 1.2.3.4/32
+```
+
+Setup notes:
+- Create the Network List and set the port-forward's **From: List** to it once in
+  the UniFi UI; the app manages only the list members.
+- Use a dedicated limited local UniFi account, not your main admin login.
+- Credentials are best injected via `UNIFI_USERNAME` / `UNIFI_PASSWORD`.
+- IPv4 only for now.
 
 ## Docker image
 

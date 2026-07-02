@@ -6,6 +6,7 @@ var (
 	h Authentication
 	w Whitelist
 	a Azure
+	u Unifi
 )
 
 func main() {

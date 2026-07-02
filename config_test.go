@@ -50,3 +50,32 @@ func TestApplyDefaults(t *testing.T) {
 		t.Errorf("partial resource not defaulted correctly: %+v", resources[2])
 	}
 }
+
+func TestUnifiConfigLoad(t *testing.T) {
+	t.Setenv("UNIFI_USERNAME", "envuser")
+	t.Setenv("UNIFI_PASSWORD", "envpass")
+
+	ret := c.load()
+
+	if ret.Unifi.Host == "" {
+		t.Error("Failed to load config, missing config.unifi.host")
+	}
+	if ret.Unifi.Site != "default" {
+		t.Errorf("expected unifi.site default 'default', got %q", ret.Unifi.Site)
+	}
+	if ret.Unifi.Username != "envuser" || ret.Unifi.Password != "envpass" {
+		t.Errorf("UNIFI_USERNAME/PASSWORD env overrides not applied: %+v", ret.Unifi)
+	}
+	found := false
+	for _, nl := range u.NetworkList {
+		if nl.Name == "ip-whitelister" {
+			found = true
+			if nl.client == nil {
+				t.Error("network list client was not constructed")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected a unifi networklist resource named 'ip-whitelister' to be loaded")
+	}
+}
