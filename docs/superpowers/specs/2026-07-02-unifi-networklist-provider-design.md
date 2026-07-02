@@ -124,9 +124,16 @@ interface (rule of three — UniFi is only the 2nd provider; extract later when 
 gets the unit coverage the Azure code never had:
 
 ```go
+type unifiFirewallGroup struct {
+    ID        string   `json:"_id"`
+    Name      string   `json:"name"`
+    GroupType string   `json:"group_type"`
+    Members   []string `json:"group_members"`
+}
+
 type unifiClient interface {
-    getNetworkList(name string) (id string, members []string, err error)
-    updateNetworkList(id string, members []string) error
+    getFirewallGroup(name string) (unifiFirewallGroup, error)
+    updateFirewallGroup(g unifiFirewallGroup) error   // g carries id/name/group_type + new members
 }
 ```
 
