@@ -62,7 +62,7 @@ Key top-level options:
 | -------------- | ------------------------------------------------------------------ |
 | `url`          | Public base URL of the app (used to build the OAuth callback).     |
 | `ttl`          | Whitelist lifetime in hours (default `24`).                        |
-| `auth`         | AzureAD tenant/client credentials (`type: azure`).                 |
+| `auth`         | Authentication mode: `type: azure` (AzureAD OAuth) or `type: none` (disable in-app auth — see [Disabling auth](#disabling-auth-reverse-proxy-sso)). |
 | `redis`        | Redis `host`, `port`, and `token`.                                 |
 | `unifi`        | UniFi gateway connection + credentials (see [UniFi](#unifi)).       |
 | `resources`    | List of cloud resources to whitelist against (see example config). |
@@ -85,6 +85,29 @@ Sensitive values can be injected via env vars, overriding the YAML:
 > `tenant_id` is left as the placeholder value from the sample config, and UniFi
 > syncing is skipped while `unifi.host` is empty or contains `notreal`, so the
 > dummy config never touches real cloud resources or a real gateway.
+
+### Disabling auth (reverse-proxy SSO)
+
+If you run ip-whitelister behind an SSO reverse proxy (e.g. Cloudflare Access,
+Authelia, oauth2-proxy) you can disable the built-in AzureAD login and let the
+proxy handle authentication:
+
+```yaml
+auth:
+  type: none   # alias: disabled
+  # header: Cf-Access-Authenticated-User-Email   # trusted identity header (default shown)
+```
+
+In this mode any request to `/` immediately whitelists the caller's IP and shows
+a confirmation page — there is no OAuth redirect or callback. The whitelist
+entry is keyed on the identity the proxy supplies in the configured `header`
+(default `Cf-Access-Authenticated-User-Email`); if that header is absent the
+entry is keyed on the client IP instead.
+
+Because AzureAD group membership is unavailable without OAuth, **group-scoped
+resources are skipped** in this mode — only resources without a `group:` filter
+are whitelisted. `tenant_id`, `client_id` and `client_secret` are ignored and
+can be omitted.
 
 ### UniFi
 
