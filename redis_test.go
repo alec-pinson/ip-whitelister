@@ -242,6 +242,54 @@ func TestAddGroups(t *testing.T) {
 	DeleteTestRedis(t, testRedisInstance)
 }
 
+func TestApiThrottle(t *testing.T) {
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	ret := r.connect(rc)
+	if ret == true {
+		const user = "testuser111111"
+
+		// a user that has never called the api may call it
+		if !r.canCallApi(user) {
+			t.Errorf("redis.canCallApi(): fresh user %q, got 'false', want 'true'", user)
+		}
+
+		// after recording a call, the user is throttled
+		r.apiCalled(user)
+		if r.canCallApi(user) {
+			t.Errorf("redis.canCallApi(): throttled user %q, got 'true', want 'false'", user)
+		}
+
+		// a different user is unaffected by the throttle
+		if !r.canCallApi("testuser222222") {
+			t.Errorf("redis.canCallApi(): unrelated user, got 'false', want 'true'")
+		}
+	}
+
+	DeleteTestRedis(t, testRedisInstance)
+}
+
+func TestGetGroupsMissing(t *testing.T) {
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	ret := r.connect(rc)
+	if ret == true {
+		// a user with no cached groups returns an empty slice, not an error
+		groups := r.getGroups("testuser-does-not-exist")
+		if len(groups) != 0 {
+			t.Errorf("redis.getGroups(): missing user, got '%v', want empty", groups)
+		}
+	}
+
+	DeleteTestRedis(t, testRedisInstance)
+}
+
 func TestGetGroups(t *testing.T) {
 	users := []struct {
 		user    string

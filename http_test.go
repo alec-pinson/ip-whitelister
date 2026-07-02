@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -164,5 +165,52 @@ func TestIndexHandler(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "Whitelisting your IP") {
 		t.Errorf("IndexHandler(new=true) body missing the whitelisting message")
+	}
+}
+
+func TestIndexHandlerWithToken(t *testing.T) {
+	// Minimal wiring normally done by Authentication.init / initAzure.
+	gob.Register(&oauth2.Token{})
+	store = sessions.NewFilesystemStore(t.TempDir(), sessionStoreKeyPairs...)
+	oauthConfig = &oauth2.Config{
+		ClientID:    "test-client",
+		RedirectURL: "http://localhost/callback",
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://login.example.com/authorize",
+			TokenURL: "https://login.example.com/token",
+		},
+	}
+
+	// Populate a session with a token + ip, as callbackHandler would, and
+	// capture the resulting session cookie.
+	saveReq := httptest.NewRequest("GET", "/", nil)
+	saveRR := httptest.NewRecorder()
+	session, _ := store.Get(saveReq, "session")
+	session.Values["token"] = &oauth2.Token{AccessToken: "test-access-token"}
+	session.Values["ip_address"] = "203.0.113.7"
+	if err := sessions.Save(saveReq, saveRR); err != nil {
+		t.Fatalf("failed to save session: %v", err)
+	}
+
+	// Replay the cookie so IndexHandler takes the token-present branch.
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	for _, cookie := range saveRR.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+	if err := IndexHandler(rr, req); err != nil {
+		t.Fatalf("IndexHandler() unexpected error: %v", err)
+	}
+
+	body := rr.Body.String()
+	// the token branch renders the "Whitelist again" link and the whitelisted IP
+	if !strings.Contains(body, "Whitelist again") {
+		t.Errorf("IndexHandler() with token missing the 'Whitelist again' link:\n%s", body)
+	}
+	if !strings.Contains(body, "203.0.113.7") {
+		t.Errorf("IndexHandler() with token missing the whitelisted IP:\n%s", body)
+	}
+	if strings.Contains(body, "Whitelisting your IP") {
+		t.Errorf("IndexHandler() with token should not render the redirect branch:\n%s", body)
 	}
 }
