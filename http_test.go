@@ -214,3 +214,48 @@ func TestIndexHandlerWithToken(t *testing.T) {
 		t.Errorf("IndexHandler() with token should not render the redirect branch:\n%s", body)
 	}
 }
+
+func TestNoAuthIndexHandler(t *testing.T) {
+	testRedisInstance := CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	if !r.connect(rc) {
+		t.Fatal("could not connect to test redis")
+	}
+	defer DeleteTestRedis(t, testRedisInstance)
+
+	// config is never loaded in tests; give redis keys a real TTL and set the
+	// trusted header the no-auth path reads.
+	c.TTL = 24
+	c.Auth.Header = "Cf-Access-Authenticated-User-Email"
+	defer func() { c.Auth.Header = "" }()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Cf-Access-Authenticated-User-Email", "alice@example.com")
+	req.Header.Set("X-Azure-Clientip", "203.0.113.7")
+	rr := httptest.NewRecorder()
+
+	if err := noAuthIndexHandler(rr, req); err != nil {
+		t.Fatalf("noAuthIndexHandler() unexpected error: %v", err)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "203.0.113.7") {
+		t.Errorf("body missing whitelisted IP:\n%s", body)
+	}
+	if !strings.Contains(body, "alice@example.com") {
+		t.Errorf("body missing identity:\n%s", body)
+	}
+	if !strings.Contains(body, "has been whitelisted") {
+		t.Errorf("body missing confirmation text:\n%s", body)
+	}
+	if strings.Contains(body, "Whitelisting your IP") {
+		t.Errorf("body unexpectedly rendered the OAuth redirect branch:\n%s", body)
+	}
+
+	if got := r.getWhitelist()["aliceexamplecom"]; got != "203.0.113.7/32" {
+		t.Errorf("redis whitelist entry = %q, want %q", got, "203.0.113.7/32")
+	}
+}

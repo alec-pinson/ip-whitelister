@@ -72,6 +72,26 @@ var indexTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
 </html>
 `))
 
+var noAuthTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dynamic IP Whitelist</title>
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  </head>
+  <body class="container-fluid">
+    <div class="row">
+      <div class="col-xs-4 col-xs-offset-4">
+        <h1>Dynamic IP Whitelist</h1>
+        Welcome{{with .Name}} {{.}}{{end}}, your IP ({{.IPAddress}}) has been whitelisted.
+        <br>
+        <i>Note: It can take a few minutes for your whitelisting to become active. Please note that IPv6 cannot be whitelisted on all resources.</i>
+      </div>
+    </div>
+  </body>
+</html>
+`))
+
 func (h handle) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -130,6 +150,8 @@ func (*Authentication) init(a Authentication) {
 	switch strings.ToLower(a.Type) {
 	case "azure":
 		a.initAzure()
+	case "none", "disabled":
+		a.initNoAuth()
 	default:
 		log.Fatalln("http.init(): unsupported authentication type '" + a.Type + "'")
 	}
@@ -158,6 +180,30 @@ func (a *Authentication) initAzure() {
 	http.Handle("/ready", handle(readinessHandler))
 	http.Handle("/callback", handle(callbackHandler))
 	http.Handle("/", handle(IndexHandler))
+	log.Fatal(http.ListenAndServe(":8090", nil))
+}
+
+func noAuthIndexHandler(w http.ResponseWriter, req *http.Request) error {
+	var u User
+	if u.newFromRequest(req) == nil {
+		return Error{Code: http.StatusBadRequest, Message: "could not determine client IP"}
+	}
+	u.whitelist()
+
+	var data = struct {
+		Name      string
+		IPAddress string
+	}{
+		Name:      u.name,
+		IPAddress: u.ip,
+	}
+	return noAuthTempl.Execute(w, &data)
+}
+
+func (a *Authentication) initNoAuth() {
+	http.Handle("/live", handle(livenessHandler))
+	http.Handle("/ready", handle(readinessHandler))
+	http.Handle("/", handle(noAuthIndexHandler))
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }
 
