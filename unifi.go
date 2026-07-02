@@ -40,12 +40,6 @@ type unifiClient interface {
 	updateFirewallGroup(g unifiFirewallGroup) error
 }
 
-// UnifiConfiguration holds the single UniFi gateway connection + credentials.
-// TODO(batch-b): replaced by config.go / real client
-type UnifiConfiguration struct {
-	Host, Site, Username, Password string
-}
-
 // unifiApplicationClient is the MVP unifiClient implementation, talking to the
 // legacy UniFi Network Application API (login + REST firewallgroup endpoints).
 type unifiApplicationClient struct {

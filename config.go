@@ -20,6 +20,7 @@ type Configuration struct {
 	Defaults    Defaults                `yaml:"defaults"`
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml:"ttl"`
+	Unifi       UnifiConfiguration      `yaml:"unifi"`
 }
 
 // Defaults are per-config-file fallback values applied to any resource in that
@@ -27,6 +28,14 @@ type Configuration struct {
 type Defaults struct {
 	SubscriptionId string `yaml:"subscription_id"`
 	ResourceGroup  string `yaml:"resource_group"`
+}
+
+// UnifiConfiguration holds the single UniFi gateway connection + credentials.
+type UnifiConfiguration struct {
+	Host     string `yaml:"host"`
+	Site     string `yaml:"site"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type ResourceConfiguration struct {
@@ -87,6 +96,16 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		c.TTL = 24
 	}
 
+	if c.Unifi.Site == "" {
+		c.Unifi.Site = "default"
+	}
+	if os.Getenv("UNIFI_USERNAME") != "" {
+		c.Unifi.Username = os.Getenv("UNIFI_USERNAME")
+	}
+	if os.Getenv("UNIFI_PASSWORD") != "" {
+		c.Unifi.Password = os.Getenv("UNIFI_PASSWORD")
+	}
+
 	// empty resources first
 	a.FrontDoor = nil
 	a.KeyVault = nil
@@ -94,6 +113,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 	a.StorageAccount = nil
 	a.RedisCache = nil
 	a.CosmosDb = nil
+	u.NetworkList = nil
 
 	// load extra resource configs
 	resourceConfigs, err := ioutil.ReadDir("config/resources/")
@@ -174,6 +194,18 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				cd.IPWhiteList = resource.IPWhiteList
 				cd.Group = resource.Group
 				cd.new(cd)
+			default:
+				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
+			}
+		case "unifi":
+			switch strings.ToLower(resource.Type) {
+			case "networklist":
+				var nl UnifiNetworkList
+				nl.Name = resource.Name
+				nl.Group = resource.Group
+				nl.IPWhiteList = resource.IPWhiteList
+				nl.client = newUnifiClient(c.Unifi)
+				nl.new(nl)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
 			}
