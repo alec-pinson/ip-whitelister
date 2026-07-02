@@ -135,6 +135,7 @@ func (*Whitelist) inRange(ip string, whitelist []string) bool {
 				if c.Debug {
 					log.Printf("whitelist.inRange(): IPAddress value %v overlaps with already whitelisted value %v", ip, v)
 				}
+				return true
 			}
 		}
 	}

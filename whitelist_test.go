@@ -108,6 +108,10 @@ func TestInRange(t *testing.T) {
 		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", []string{"1.2.3.0/24"}, false},
 		// ipv6 with an empty static whitelist
 		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "2a00:11c7:1234:b801:a16e:12af:5e42:1111/32", []string{}, false},
+		// a bare (non-CIDR) static whitelist entry that exactly matches
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "203.0.113.5", []string{"203.0.113.5"}, true},
+		// a bare static whitelist entry that does not match
+		{Whitelist{map[string]string{"alecpinson123456": "123.123.123.123/32"}}, "203.0.113.6", []string{"203.0.113.5"}, false},
 	}
 
 	for _, f := range tests {
