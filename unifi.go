@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -45,6 +46,14 @@ type unifiClient interface {
 type unifiApplicationClient struct {
 	cfg  UnifiConfiguration
 	http *http.Client
+
+	// mu serialises authenticated requests and guards csrf. The session is
+	// reused across update() calls: UniFi rate-limits back-to-back logins with a
+	// 403, so we log in once (lazily) and only re-authenticate when the session
+	// expires. Serialising also stops concurrent update()s rotating the token
+	// mid-flight.
+	mu   sync.Mutex
+	csrf string // cached CSRF token for the live session; "" means logged out
 }
 
 // newUnifiClient builds the real unifiClient implementation. TLS verification is
@@ -68,39 +77,73 @@ func (uc *unifiApplicationClient) base() string {
 	return strings.TrimRight(uc.cfg.Host, "/") + "/proxy/network/api/s/" + uc.cfg.Site + "/rest/firewallgroup"
 }
 
-// login authenticates against the gateway and returns the CSRF token. The token
-// is returned (not stored on the struct) so concurrent update() calls sharing
-// this client don't clobber each other's token — a data race that caused
-// intermittent 403s. The session cookie lives in the shared cookiejar, which is
-// safe for concurrent use.
-func (uc *unifiApplicationClient) login() (string, error) {
+// login authenticates against the gateway and caches the session's CSRF token.
+// The session cookie is stored in the client's cookiejar. Callers must hold uc.mu.
+func (uc *unifiApplicationClient) login() error {
 	body, _ := json.Marshal(map[string]string{"username": uc.cfg.Username, "password": uc.cfg.Password})
 	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(uc.cfg.Host, "/")+"/api/auth/login", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := uc.http.Do(req)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unifi login failed: status %d", resp.StatusCode)
+		return fmt.Errorf("unifi login failed: status %d", resp.StatusCode)
 	}
-	return resp.Header.Get("X-CSRF-Token"), nil
+	uc.csrf = resp.Header.Get("X-CSRF-Token")
+	return nil
+}
+
+// authedDo performs an authenticated request against the gateway, reusing the
+// existing session so we don't trip UniFi's login rate limit (which 403s
+// back-to-back logins). It logs in lazily on first use, refreshes the rotating
+// CSRF token from each response, and re-authenticates once if the session has
+// expired (401) or the token is stale (403). uc.mu serialises requests so a
+// concurrent update() can't rotate the token out from under an in-flight call.
+func (uc *unifiApplicationClient) authedDo(method, url string, body []byte) (*http.Response, error) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if uc.csrf == "" {
+			if err := uc.login(); err != nil {
+				return nil, err
+			}
+		}
+		req, err := http.NewRequest(method, url, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		req.Header.Set("X-CSRF-Token", uc.csrf)
+		resp, err := uc.http.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		if t := resp.Header.Get("X-CSRF-Token"); t != "" {
+			uc.csrf = t
+		}
+		// Session expired or token stale: drop it and re-login on the retry.
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			resp.Body.Close()
+			uc.csrf = ""
+			lastErr = fmt.Errorf("unifi %s: status %d", method, resp.StatusCode)
+			continue
+		}
+		return resp, nil
+	}
+	return nil, lastErr
 }
 
 func (uc *unifiApplicationClient) getFirewallGroup(name string) (unifiFirewallGroup, error) {
-	// GET only needs the session cookie from the jar, not the CSRF token.
-	if _, err := uc.login(); err != nil {
-		return unifiFirewallGroup{}, err
-	}
-	req, err := http.NewRequest(http.MethodGet, uc.base(), nil)
-	if err != nil {
-		return unifiFirewallGroup{}, err
-	}
-	resp, err := uc.http.Do(req)
+	resp, err := uc.authedDo(http.MethodGet, uc.base(), nil)
 	if err != nil {
 		return unifiFirewallGroup{}, err
 	}
@@ -123,18 +166,8 @@ func (uc *unifiApplicationClient) getFirewallGroup(name string) (unifiFirewallGr
 }
 
 func (uc *unifiApplicationClient) updateFirewallGroup(g unifiFirewallGroup) error {
-	csrf, err := uc.login()
-	if err != nil {
-		return err
-	}
 	body, _ := json.Marshal(g)
-	req, err := http.NewRequest(http.MethodPut, uc.base()+"/"+g.ID, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-CSRF-Token", csrf)
-	resp, err := uc.http.Do(req)
+	resp, err := uc.authedDo(http.MethodPut, uc.base()+"/"+g.ID, body)
 	if err != nil {
 		return err
 	}
@@ -177,6 +210,7 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 	members := []string{}
 	seen := make(map[string]struct{})
 	add := func(ip string) {
+		ip = unifiMember(ip)
 		if _, ok := seen[ip]; ok {
 			return
 		}
@@ -200,6 +234,15 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 		}
 	}
 	return members
+}
+
+// unifiMember formats an address for a UniFi firewall group. UniFi stores single
+// hosts as bare IPs — its UI rejects a /32 suffix ("enter single host addresses
+// without the subnet mask") — so we strip a /32 while leaving real subnets (e.g.
+// /24) untouched. Matching UniFi's stored form also keeps sameMembers() stable,
+// so an unchanged whitelist doesn't force a PUT on every reconcile.
+func unifiMember(ip string) string {
+	return strings.TrimSuffix(ip, "/32")
 }
 
 func (*UnifiNetworkList) new(nl UnifiNetworkList) {
