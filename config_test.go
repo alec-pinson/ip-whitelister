@@ -51,6 +51,34 @@ func TestApplyDefaults(t *testing.T) {
 	}
 }
 
+func TestApplyAuthDefaults(t *testing.T) {
+	cases := []struct {
+		name         string
+		typ          string
+		header       string
+		ipHeader     string
+		wantHeader   string
+		wantIPHeader string
+	}{
+		{"none defaults both headers", "none", "", "", "Cf-Access-Authenticated-User-Email", "Cf-Connecting-Ip"},
+		{"disabled alias defaults too", "disabled", "", "", "Cf-Access-Authenticated-User-Email", "Cf-Connecting-Ip"},
+		{"case-insensitive type", "None", "", "", "Cf-Access-Authenticated-User-Email", "Cf-Connecting-Ip"},
+		{"explicit headers are kept", "none", "X-My-Id", "X-My-Ip", "X-My-Id", "X-My-Ip"},
+		{"azure is unaffected", "azure", "", "", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := applyAuthDefaults(Authentication{Type: tc.typ, Header: tc.header, IPHeader: tc.ipHeader})
+			if got.Header != tc.wantHeader {
+				t.Errorf("header = %q, want %q", got.Header, tc.wantHeader)
+			}
+			if got.IPHeader != tc.wantIPHeader {
+				t.Errorf("ipHeader = %q, want %q", got.IPHeader, tc.wantIPHeader)
+			}
+		})
+	}
+}
+
 func TestUnifiConfigLoad(t *testing.T) {
 	t.Setenv("UNIFI_USERNAME", "envuser")
 	t.Setenv("UNIFI_PASSWORD", "envpass")

@@ -64,6 +64,8 @@ func TestHasGroup(t *testing.T) {
 		{[]string{"group5"}, []string{"group5", "group10"}, true},
 		{[]string{"group1", "group2"}, []string{"group6", "group2"}, true},
 		{[]string{"group1"}, []string{"group9", "group10", "group11"}, false},
+		// a no-auth user has no groups -> group-scoped resources are skipped
+		{[]string{"group1"}, nil, false},
 		{[]string{"group1", "group2", "group3", "group4"}, []string{"group5"}, false},
 		// a resource with no group restriction (nil) is open to everyone
 		{nil, []string{"group1"}, true},

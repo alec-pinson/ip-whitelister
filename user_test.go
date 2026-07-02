@@ -47,6 +47,8 @@ func fakeGraphClient(me, memberOf fakeResponse) *http.Client {
 
 func TestUserNew(t *testing.T) {
 	c.Debug = false
+	c.Auth.IPHeader = "" // azure path reads X-Azure-Clientip
+	defer func() { c.Auth.IPHeader = "" }()
 
 	tests := []struct {
 		name         string
@@ -166,6 +168,89 @@ func TestUserWhitelist(t *testing.T) {
 
 	if got := r.getWhitelist()[u.key]; got != u.cidr {
 		t.Errorf("user.whitelist(): redis entry for %q = %q, want %q", u.key, got, u.cidr)
+	}
+}
+
+func TestUserNewFromRequest(t *testing.T) {
+	c.Debug = false
+	c.Auth.Header = "Cf-Access-Authenticated-User-Email"
+	defer func() { c.Auth.Header = "" }()
+	c.Auth.IPHeader = "Cf-Connecting-Ip"
+	defer func() { c.Auth.IPHeader = "" }()
+
+	tests := []struct {
+		name       string
+		header     string // Cf-Access-Authenticated-User-Email value ("" = not set)
+		clientIP   string // Cf-Connecting-Ip value ("" = not set)
+		remoteAddr string
+		wantName   string
+		wantKey    string
+		wantIP     string
+		wantCidr   string
+	}{
+		{
+			name:       "identity from trusted header",
+			header:     "alice@example.com",
+			clientIP:   "1.2.3.4",
+			remoteAddr: "10.0.0.1:5555",
+			wantName:   "alice@example.com",
+			wantKey:    "aliceexamplecom",
+			wantIP:     "1.2.3.4",
+			wantCidr:   "1.2.3.4/32",
+		},
+		{
+			name:       "no header falls back to keying on IP",
+			header:     "",
+			clientIP:   "",
+			remoteAddr: "8.8.8.8:1234",
+			wantName:   "",
+			wantKey:    "8888",
+			wantIP:     "8.8.8.8",
+			wantCidr:   "8.8.8.8/32",
+		},
+		{
+			name:       "loopback is rewritten for local testing",
+			header:     "",
+			clientIP:   "::1",
+			remoteAddr: "[::1]:8080",
+			wantName:   "",
+			wantKey:    "80188118",
+			wantIP:     "80.18.81.18",
+			wantCidr:   "80.18.81.18/32",
+		},
+	}
+
+	for _, f := range tests {
+		t.Run(f.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = f.remoteAddr
+			if f.clientIP != "" {
+				req.Header.Set("Cf-Connecting-Ip", f.clientIP)
+			}
+			if f.header != "" {
+				req.Header.Set("Cf-Access-Authenticated-User-Email", f.header)
+			}
+
+			var u User
+			if got := u.newFromRequest(req); got == nil {
+				t.Fatalf("newFromRequest() returned nil, want a populated user")
+			}
+			if u.name != f.wantName {
+				t.Errorf("name: got %q, want %q", u.name, f.wantName)
+			}
+			if u.key != f.wantKey {
+				t.Errorf("key: got %q, want %q", u.key, f.wantKey)
+			}
+			if u.ip != f.wantIP {
+				t.Errorf("ip: got %q, want %q", u.ip, f.wantIP)
+			}
+			if u.cidr != f.wantCidr {
+				t.Errorf("cidr: got %q, want %q", u.cidr, f.wantCidr)
+			}
+			if u.groups != nil {
+				t.Errorf("groups: got %v, want nil", u.groups)
+			}
+		})
 	}
 }
 

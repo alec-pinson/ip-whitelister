@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  ip-whitelister:
+    build: .
+    volumes:
+      - ./config.dev:/app/config:ro
+    ports:
+      - "8082:8080"
+    restart: always
+    environment:
+      CONFIG_FILE: "/app/config/config.yaml"
+  redis:
+    image: redis:6.2.6-alpine
+    volumes:
+      - ./config.dev:/usr/local/etc/redis:ro
+    command: redis-server /usr/local/etc/redis/redis.conf

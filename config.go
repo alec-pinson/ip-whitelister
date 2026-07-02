@@ -64,6 +64,22 @@ func applyDefaults(resources []ResourceConfiguration, d Defaults) {
 	}
 }
 
+// applyAuthDefaults fills in auth defaults. When auth is disabled
+// (type none/disabled) and no identity header is configured, it defaults to the
+// header set by Cloudflare Access.
+func applyAuthDefaults(a Authentication) Authentication {
+	switch strings.ToLower(a.Type) {
+	case "none", "disabled":
+		if a.Header == "" {
+			a.Header = "Cf-Access-Authenticated-User-Email"
+		}
+		if a.IPHeader == "" {
+			a.IPHeader = "Cf-Connecting-Ip"
+		}
+	}
+	return a
+}
+
 func (c *Configuration) load(reload ...bool) *Configuration {
 	if strings.ToLower(os.Getenv("DEBUG")) == "true" {
 		c.Debug = true
@@ -95,6 +111,8 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 	if c.TTL == 0 {
 		c.TTL = 24
 	}
+
+	c.Auth = applyAuthDefaults(c.Auth)
 
 	if c.Unifi.Site == "" {
 		c.Unifi.Site = "default"
