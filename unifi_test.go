@@ -85,7 +85,7 @@ func TestBuildMembers(t *testing.T) {
 	list := map[string]string{
 		"alice": "1.1.1.1/32", // in group-a  -> included
 		"bob":   "2.2.2.2/32", // not in group-a -> excluded
-		"carol": "10.0.0.0/8", // carol static-covered below? no -> included (nil groups but nl.Group set -> excluded)
+		"carol": "10.0.0.0/8", // carol has no groups; nl.Group is set -> excluded
 	}
 
 	got := nl.buildMembers(list, getGroups)
@@ -114,6 +114,29 @@ func TestBuildMembersNilGroupIncludesEveryone(t *testing.T) {
 	got := nl.buildMembers(list, getGroups)
 	if len(got) != 1 || got[0] != "1.1.1.1/32" {
 		t.Errorf("buildMembers = %v, want [1.1.1.1/32] (invalid IP skipped)", got)
+	}
+}
+
+func TestBuildMembersDeduplicates(t *testing.T) {
+	c.Debug = false
+	// same IP appears as a global static, a per-list static, and two users
+	c.IPWhiteList = []string{"5.5.5.5/32"}
+	getGroups := func(string) []string { return nil }
+	nl := UnifiNetworkList{Name: "dup", Group: nil, IPWhiteList: []string{"5.5.5.5/32"}}
+	list := map[string]string{
+		"alice": "1.1.1.1/32", // shared public IP (e.g. same office NAT)
+		"bob":   "1.1.1.1/32", // shared public IP
+	}
+	got := nl.buildMembers(list, getGroups)
+	if len(got) != 2 {
+		t.Fatalf("buildMembers = %v, want 2 unique members", got)
+	}
+	seen := map[string]int{}
+	for _, m := range got {
+		seen[m]++
+	}
+	if seen["1.1.1.1/32"] != 1 || seen["5.5.5.5/32"] != 1 {
+		t.Errorf("expected each of 1.1.1.1/32 and 5.5.5.5/32 exactly once, got %v", got)
 	}
 }
 

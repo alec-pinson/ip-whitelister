@@ -168,13 +168,26 @@ func sameMembers(a, b []string) bool {
 
 // buildMembers computes the desired address-group members for this list:
 // qualifying dynamic whitelist IPs plus the static (global + per-list) entries.
+// Members are de-duplicated (first occurrence wins, order preserved): two users
+// behind the same public IP, or an IP present in both the static and dynamic
+// sets, must not produce a duplicate entry. UniFi normalises group_members to a
+// set, so a duplicate would make sameMembers() never match and force a PUT on
+// every reconcile.
 func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(string) []string) []string {
 	members := []string{}
+	seen := make(map[string]struct{})
+	add := func(ip string) {
+		if _, ok := seen[ip]; ok {
+			return
+		}
+		seen[ip] = struct{}{}
+		members = append(members, ip)
+	}
 	// dynamic whitelist
 	for key, ip := range list {
 		if !w.inRange(ip, nl.IPWhiteList) && isValidIpOrNetV4(ip) {
 			if hasGroup(nl.Group, getGroups(key)) {
-				members = append(members, ip)
+				add(ip)
 			} else if c.Debug {
 				log.Print("unifi.UnifiNetworkList.buildMembers(): user '"+key+"' is not part of any of the groups ", nl.Group, " required for network list '"+nl.Name+"'")
 			}
@@ -183,7 +196,7 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 	// static whitelist (global + per-list)
 	for _, ip := range append(c.IPWhiteList, nl.IPWhiteList...) {
 		if isValidIpOrNetV4(ip) {
-			members = append(members, ip)
+			add(ip)
 		}
 	}
 	return members
