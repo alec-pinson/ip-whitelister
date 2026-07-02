@@ -34,3 +34,4 @@ ip-whitelister-secrets.yaml
 helm/values.yaml
 .hq-docs/
 ip-whitelister
+config.dev
