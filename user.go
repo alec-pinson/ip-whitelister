@@ -86,36 +86,54 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 		log.Printf("user.new(): %v groups: %v", u.name, u.groups)
 	}
 
-	// Create our 'key' by removing spaces, converting to lower and removing all special characters
-	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-	if err != nil {
-		log.Fatal("user.new():", err)
-	}
-	u.key = strings.ToLower(reg.ReplaceAllString(u.name+u.employeeId, ""))
-
-	// get ip
-	u.ip = req.Header.Get("X-Azure-Clientip")
-	if u.ip == "" {
-		u.ip, _, err = net.SplitHostPort(req.RemoteAddr)
-		if err != nil {
-			log.Printf("user.new(): %q is not IP:port\n", req.RemoteAddr)
-		}
-	}
-
-	// annoying when testing locally, make up an ip :)
-	if u.ip == "::1" {
-		u.ip = "80.18.81.18"
-		// u.ip = "1a00:12a1:1234:a123:a12a:12a1:1a12:1234" // ipv6 testing
-	}
-
-	u.cidr, err = addNetmask(u.ip)
-	if err != nil {
+	// derive key, client IP, and cidr (shared with the no-auth path)
+	if err := u.finishUser(u.name+u.employeeId, req); err != nil {
 		log.Fatal("user.new(): ", err)
 	}
 
 	log.Println("user.new(): authentication successful - " + u.name + " (" + u.employeeId + ") - " + u.ip)
 
 	return u
+}
+
+// finishUser fills in the request-derived fields shared by both the OAuth and
+// no-auth constructors: the client IP (with a loopback override for local
+// testing), its cidr, and the whitelist key derived from identity. When
+// identity is empty the key falls back to the client IP.
+func (u *User) finishUser(identity string, req *http.Request) error {
+	// get ip
+	u.ip = req.Header.Get("X-Azure-Clientip")
+	if u.ip == "" {
+		var err error
+		u.ip, _, err = net.SplitHostPort(req.RemoteAddr)
+		if err != nil {
+			log.Printf("user.finishUser(): %q is not IP:port\n", req.RemoteAddr)
+		}
+	}
+
+	// annoying when testing locally, make up an ip :)
+	if u.ip == "::1" {
+		u.ip = "80.18.81.18"
+	}
+
+	cidr, err := addNetmask(u.ip)
+	if err != nil {
+		return err
+	}
+	u.cidr = cidr
+
+	// Create our 'key' by removing spaces, lower-casing and stripping special
+	// characters. Fall back to the IP when there is no identity (no-auth mode).
+	if identity == "" {
+		identity = u.ip
+	}
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err != nil {
+		return err
+	}
+	u.key = strings.ToLower(reg.ReplaceAllString(identity, ""))
+
+	return nil
 }
 
 func (u *User) whitelist() {
