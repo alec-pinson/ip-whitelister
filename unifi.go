@@ -1,8 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
+	"net/http/cookiejar"
 	"strings"
+	"time"
 )
 
 // Unifi is the aggregate of all configured UniFi provider resources.
@@ -39,9 +46,105 @@ type UnifiConfiguration struct {
 	Host, Site, Username, Password string
 }
 
-// newUnifiClient builds the real unifiClient implementation.
-// TODO(batch-b): replaced by config.go / real client
-func newUnifiClient(UnifiConfiguration) unifiClient { return nil }
+// unifiApplicationClient is the MVP unifiClient implementation, talking to the
+// legacy UniFi Network Application API (login + REST firewallgroup endpoints).
+type unifiApplicationClient struct {
+	cfg  UnifiConfiguration
+	http *http.Client
+	csrf string
+}
+
+// newUnifiClient builds the real unifiClient implementation. TLS verification is
+// intentionally skipped (InsecureSkipVerify) because UniFi gateways ship
+// self-signed certificates.
+func newUnifiClient(cfg UnifiConfiguration) unifiClient {
+	jar, _ := cookiejar.New(nil)
+	return &unifiApplicationClient{
+		cfg: cfg,
+		http: &http.Client{
+			Timeout: 30 * time.Second,
+			Jar:     jar,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
+	}
+}
+
+func (uc *unifiApplicationClient) base() string {
+	return strings.TrimRight(uc.cfg.Host, "/") + "/proxy/network/api/s/" + uc.cfg.Site + "/rest/firewallgroup"
+}
+
+func (uc *unifiApplicationClient) login() error {
+	body, _ := json.Marshal(map[string]string{"username": uc.cfg.Username, "password": uc.cfg.Password})
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(uc.cfg.Host, "/")+"/api/auth/login", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := uc.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unifi login failed: status %d", resp.StatusCode)
+	}
+	uc.csrf = resp.Header.Get("X-CSRF-Token")
+	return nil
+}
+
+func (uc *unifiApplicationClient) getFirewallGroup(name string) (unifiFirewallGroup, error) {
+	if err := uc.login(); err != nil {
+		return unifiFirewallGroup{}, err
+	}
+	req, err := http.NewRequest(http.MethodGet, uc.base(), nil)
+	if err != nil {
+		return unifiFirewallGroup{}, err
+	}
+	resp, err := uc.http.Do(req)
+	if err != nil {
+		return unifiFirewallGroup{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return unifiFirewallGroup{}, fmt.Errorf("unifi getFirewallGroup failed: status %d", resp.StatusCode)
+	}
+	var out struct {
+		Data []unifiFirewallGroup `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return unifiFirewallGroup{}, err
+	}
+	for _, g := range out.Data {
+		if g.Name == name {
+			return g, nil
+		}
+	}
+	return unifiFirewallGroup{}, fmt.Errorf("unifi network list '%s' not found", name)
+}
+
+func (uc *unifiApplicationClient) updateFirewallGroup(g unifiFirewallGroup) error {
+	if err := uc.login(); err != nil {
+		return err
+	}
+	body, _ := json.Marshal(g)
+	req, err := http.NewRequest(http.MethodPut, uc.base()+"/"+g.ID, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", uc.csrf)
+	resp, err := uc.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unifi updateFirewallGroup failed: status %d", resp.StatusCode)
+	}
+	return nil
+}
 
 // sameMembers reports whether a and b contain the same elements (order-insensitive,
 // duplicates counted). Used to decide whether a network list needs updating.

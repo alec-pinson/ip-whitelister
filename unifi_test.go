@@ -1,7 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gomodule/redigo/redis"
@@ -186,6 +190,76 @@ func TestUpdatePutError(t *testing.T) {
 	nl := UnifiNetworkList{Name: "l", client: fake}
 	if ret := nl.update(); ret != 1 {
 		t.Errorf("update() = %d, want 1 on put error", ret)
+	}
+}
+
+func TestUnifiApplicationClientGetAndUpdate(t *testing.T) {
+	var loginHits, putHits int
+	var putBody unifiFirewallGroup
+
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch {
+		case req.URL.Path == "/api/auth/login":
+			loginHits++
+			rw.Header().Set("X-CSRF-Token", "csrf123")
+			rw.WriteHeader(http.StatusOK)
+		case req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/rest/firewallgroup"):
+			_ = json.NewEncoder(rw).Encode(map[string]interface{}{
+				"data": []unifiFirewallGroup{{
+					ID: "abc", Name: "ip-whitelister", GroupType: "address-group",
+					Members: []string{"1.1.1.1/32"},
+				}},
+			})
+		case req.Method == http.MethodPut && strings.Contains(req.URL.Path, "/rest/firewallgroup/abc"):
+			putHits++
+			if req.Header.Get("X-CSRF-Token") != "csrf123" {
+				t.Errorf("PUT missing X-CSRF-Token header")
+			}
+			_ = json.NewDecoder(req.Body).Decode(&putBody)
+			_ = json.NewEncoder(rw).Encode(map[string]interface{}{"data": []unifiFirewallGroup{}})
+		default:
+			rw.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	client := newUnifiClient(UnifiConfiguration{Host: srv.URL, Site: "default", Username: "u", Password: "p"})
+
+	g, err := client.getFirewallGroup("ip-whitelister")
+	if err != nil {
+		t.Fatalf("getFirewallGroup error: %v", err)
+	}
+	if g.ID != "abc" || len(g.Members) != 1 || g.Members[0] != "1.1.1.1/32" {
+		t.Fatalf("getFirewallGroup = %+v, want id=abc members=[1.1.1.1/32]", g)
+	}
+
+	g.Members = []string{"2.2.2.2/32"}
+	if err := client.updateFirewallGroup(g); err != nil {
+		t.Fatalf("updateFirewallGroup error: %v", err)
+	}
+	if putHits != 1 {
+		t.Errorf("PUT hits = %d, want 1", putHits)
+	}
+	if putBody.ID != "abc" || len(putBody.Members) != 1 || putBody.Members[0] != "2.2.2.2/32" {
+		t.Errorf("PUT body = %+v, want id=abc members=[2.2.2.2/32]", putBody)
+	}
+	if loginHits < 1 {
+		t.Errorf("expected at least one login, got %d", loginHits)
+	}
+}
+
+func TestUnifiApplicationClientGroupNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/api/auth/login" {
+			rw.WriteHeader(http.StatusOK)
+			return
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]interface{}{"data": []unifiFirewallGroup{}})
+	}))
+	defer srv.Close()
+	client := newUnifiClient(UnifiConfiguration{Host: srv.URL, Site: "default"})
+	if _, err := client.getFirewallGroup("missing"); err == nil {
+		t.Error("expected error for missing network list, got nil")
 	}
 }
 
