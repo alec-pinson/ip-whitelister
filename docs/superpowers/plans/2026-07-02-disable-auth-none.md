@@ -612,6 +612,19 @@ Expected: one match in the `init` switch.
 
 ---
 
+### Task 7: Configurable client-IP header + review polish
+
+**Added after the final code review.** In no-auth mode the client IP must come from a trusted header the *proxy* sets — `X-Azure-Clientip` is only trustworthy behind Azure Front Door. Cloudflare puts the real client IP in `Cf-Connecting-Ip`, and leaving `X-Azure-Clientip` as the source (a) breaks IP capture behind Cloudflare and (b) lets an authenticated user spoof `X-Azure-Clientip` to whitelist an arbitrary IP. Fix: a configurable `ip_header`, defaulting to `Cf-Connecting-Ip` in no-auth mode, read in preference to `X-Azure-Clientip`. Azure mode is unchanged (empty `ip_header` → `X-Azure-Clientip`). Also folds in the review's cosmetic items.
+
+**Files:** `http.go` (struct + receiver + log msg), `config.go` (`applyAuthDefaults`), `user.go` (`finishUser`), `config_test.go`, `user_test.go`, `http_test.go`, `README.md`.
+
+- Add `IPHeader string \`yaml:"ip_header"\`` to `Authentication` (after `Header`).
+- `applyAuthDefaults`: for `none`/`disabled`, also default `IPHeader` to `Cf-Connecting-Ip` when empty.
+- `finishUser`: read the IP from `c.Auth.IPHeader` (fallback to `X-Azure-Clientip` when empty), then `RemoteAddr`.
+- Cosmetic: `initNoAuth` receiver → `func (*Authentication)`; `start()` log message `http.initAzure(): ...` → `http.start(): ...`; clarify the identity-fallback comment in `finishUser` (OAuth path always supplies identity).
+- Tests: extend `TestApplyAuthDefaults` for `ip_header`; update `TestUserNewFromRequest` + `TestNoAuthIndexHandler` to feed the IP via `Cf-Connecting-Ip` and set/reset `c.Auth.IPHeader`; make `TestUserNew` self-contained with `c.Auth.IPHeader = ""`.
+- README: document `ip_header` (default `Cf-Connecting-Ip`) and warn the proxy MUST set it to the real client IP and strip any client-supplied value.
+
 ## Notes for the implementer
 
 - The package is a flat `package main`; there are no subpackages. Run tests from the repo root.
