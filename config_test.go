@@ -51,6 +51,29 @@ func TestApplyDefaults(t *testing.T) {
 	}
 }
 
+func TestApplyAuthDefaults(t *testing.T) {
+	cases := []struct {
+		name   string
+		typ    string
+		header string
+		want   string
+	}{
+		{"none defaults the cloudflare header", "none", "", "Cf-Access-Authenticated-User-Email"},
+		{"disabled alias defaults too", "disabled", "", "Cf-Access-Authenticated-User-Email"},
+		{"case-insensitive type", "None", "", "Cf-Access-Authenticated-User-Email"},
+		{"explicit header is kept", "none", "X-My-Header", "X-My-Header"},
+		{"azure is unaffected", "azure", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := applyAuthDefaults(Authentication{Type: tc.typ, Header: tc.header})
+			if got.Header != tc.want {
+				t.Errorf("header = %q, want %q", got.Header, tc.want)
+			}
+		})
+	}
+}
+
 func TestUnifiConfigLoad(t *testing.T) {
 	t.Setenv("UNIFI_USERNAME", "envuser")
 	t.Setenv("UNIFI_PASSWORD", "envpass")

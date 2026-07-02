@@ -113,6 +113,7 @@ var (
 
 type Authentication struct {
 	Type         string `yaml:"type"`
+	Header       string `yaml:"header"`
 	TenantId     string `yaml:"tenant_id"`
 	ClientId     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
