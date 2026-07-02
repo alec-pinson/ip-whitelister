@@ -136,6 +136,28 @@ func (u *User) finishUser(identity string, req *http.Request) error {
 	return nil
 }
 
+// newFromRequest builds a User without OAuth, for auth.type: none. Identity
+// comes from the configured trusted header (set by an upstream SSO proxy such
+// as Cloudflare Access). Groups are unavailable, so u.groups stays nil and the
+// existing hasGroup logic skips group-scoped resources.
+func (u *User) newFromRequest(req *http.Request) *User {
+	var identity string
+	if c.Auth.Header != "" {
+		identity = req.Header.Get(c.Auth.Header)
+	}
+	if identity != "" {
+		u.name = identity
+	}
+
+	if err := u.finishUser(identity, req); err != nil {
+		log.Printf("user.newFromRequest(): %v", err)
+		return nil
+	}
+
+	log.Println("user.newFromRequest(): request accepted - " + u.name + " - " + u.ip)
+	return u
+}
+
 func (u *User) whitelist() {
 	s := w.add(u)
 	if s {
