@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
@@ -50,6 +51,39 @@ type ResourceConfiguration struct {
 }
 
 var defaultConfigFile = "config/config.yaml"
+var resourcesDir = "config/resources"
+
+// loadResourceConfigs reads every YAML file in dir, applying each file's own
+// defaults, and returns the combined resources. A missing dir is not an error:
+// it simply yields no extra resources, so running with only config.yaml works.
+func loadResourceConfigs(dir string) ([]ResourceConfiguration, error) {
+	entries, err := ioutil.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var resources []ResourceConfiguration
+	for _, resourceConfig := range entries {
+		if resourceConfig.IsDir() || resourceConfig.Name() == "..data" {
+			continue
+		}
+		var rc Configuration
+		yamlFile, err := ioutil.ReadFile(filepath.Join(dir, resourceConfig.Name()))
+		if err != nil {
+			return nil, err
+		}
+		if err := yaml.Unmarshal(yamlFile, &rc); err != nil {
+			return nil, err
+		}
+		// each resource file can define its own defaults
+		applyDefaults(rc.Resources, rc.Defaults)
+		resources = append(resources, rc.Resources...)
+	}
+	return resources, nil
+}
 
 // applyDefaults fills in any per-resource subscription_id / resource_group that
 // were left blank with the file-level defaults.
@@ -133,31 +167,15 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 	a.CosmosDb = nil
 	u.NetworkList = nil
 
-	// load extra resource configs
-	resourceConfigs, err := ioutil.ReadDir("config/resources/")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// apply the main config file's defaults to its own resources
 	applyDefaults(c.Resources, c.Defaults)
 
-	for _, resourceConfig := range resourceConfigs {
-		if !resourceConfig.IsDir() && resourceConfig.Name() != "..data" {
-			var rc Configuration
-			yamlFile, err := ioutil.ReadFile("config/resources/" + resourceConfig.Name())
-			if err != nil {
-				log.Fatalf("config.load(): %v ", err)
-			}
-			err = yaml.Unmarshal(yamlFile, &rc)
-			if err != nil {
-				log.Fatalf("config.load(): %v", err)
-			}
-			// each resource file can define its own defaults
-			applyDefaults(rc.Resources, rc.Defaults)
-			c.Resources = append(c.Resources, rc.Resources...)
-		}
+	// load extra resource configs (optional — a missing dir is fine)
+	extraResources, err := loadResourceConfigs(resourcesDir)
+	if err != nil {
+		log.Fatalf("config.load(): %v", err)
 	}
+	c.Resources = append(c.Resources, extraResources...)
 
 	// load resources
 	for _, resource := range c.Resources {
@@ -292,9 +310,11 @@ func (c *Configuration) watchForConfigChanges() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = watcher.Add("config/resources")
-	if err != nil {
-		log.Fatal(err)
+	// only watch the resources dir if it exists — it's optional
+	if _, err := os.Stat(resourcesDir); err == nil {
+		if err := watcher.Add(resourcesDir); err != nil {
+			log.Fatal(err)
+		}
 	}
 	<-done
 }

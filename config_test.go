@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestLoad(t *testing.T) {
 	ret := c.load()
@@ -27,6 +31,50 @@ func TestLoad(t *testing.T) {
 	}
 	if ret.Redis.Token == "" {
 		t.Error("Failed to load config, missing config.redis.token")
+	}
+}
+
+func TestLoadResourceConfigsMissingDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "does-not-exist")
+
+	resources, err := loadResourceConfigs(dir)
+	if err != nil {
+		t.Fatalf("missing resources dir should not error, got: %v", err)
+	}
+	if len(resources) != 0 {
+		t.Errorf("expected no resources from missing dir, got %d", len(resources))
+	}
+}
+
+func TestLoadResourceConfigs(t *testing.T) {
+	dir := t.TempDir()
+	yaml := "" +
+		"defaults:\n" +
+		"  subscription_id: sub-file\n" +
+		"resources:\n" +
+		"  - cloud: azure\n" +
+		"    type: keyvault\n" +
+		"    name: kv1\n"
+	if err := os.WriteFile(filepath.Join(dir, "app.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// a subdirectory and a ..data entry should both be ignored
+	if err := os.Mkdir(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	resources, err := loadResourceConfigs(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("expected 1 resource, got %d", len(resources))
+	}
+	if resources[0].Name != "kv1" {
+		t.Errorf("expected resource name kv1, got %q", resources[0].Name)
+	}
+	if resources[0].SubscriptionId != "sub-file" {
+		t.Errorf("per-file defaults not applied, got %q", resources[0].SubscriptionId)
 	}
 }
 
