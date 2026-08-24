@@ -234,6 +234,13 @@ func TestNoAuthIndexHandler(t *testing.T) {
 	defer func() { c.Auth.Header = "" }()
 	c.Auth.IPHeader = "Cf-Connecting-Ip"
 	defer func() { c.Auth.IPHeader = "" }()
+	// set explicitly rather than relying on the zero value: other tests call
+	// c.load(), which populates these headers on the shared global
+	c.IpResolution = IpResolution{
+		IPv4: IpFamilyResolution{Header: "Cf-Connecting-Ip"},
+		IPv6: IpFamilyResolution{Header: "Cf-Connecting-Ip"},
+	}
+	defer func() { c.IpResolution = IpResolution{} }()
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Cf-Access-Authenticated-User-Email", "alice@example.com")
