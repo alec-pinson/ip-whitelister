@@ -176,6 +176,22 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+func TestLoadIpResolutionDefaults(t *testing.T) {
+	ret := c.load()
+
+	// the sample config has no ip_resolution block, so both families must come
+	// out enabled with a usable header — today's behaviour, unchanged
+	if !ret.IpResolution.IPv4.isEnabled() || !ret.IpResolution.IPv6.isEnabled() {
+		t.Error("both families should be enabled when the block is omitted")
+	}
+	if ret.IpResolution.IPv4.Header == "" || ret.IpResolution.IPv6.Header == "" {
+		t.Errorf("headers should be populated, got %q / %q", ret.IpResolution.IPv4.Header, ret.IpResolution.IPv6.Header)
+	}
+	if len(ret.IpResolution.headers()) == 0 {
+		t.Error("headers() should never be empty")
+	}
+}
+
 func TestLoadResourceConfigsMissingDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
 

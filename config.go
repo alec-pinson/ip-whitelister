@@ -24,6 +24,8 @@ type Configuration struct {
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml:"ttl"`
 	Unifi       UnifiConfiguration      `yaml:"unifi"`
+	// IpResolution controls which address families are collected and how.
+	IpResolution IpResolution `yaml:"ip_resolution"`
 }
 
 // Defaults are per-config-file fallback values applied to any resource in that
@@ -309,7 +311,31 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		c.TTL = 24
 	}
 
+	// captured before applyAuthDefaults, which sets IPHeader for auth.type none
+	// — warning afterwards would fire for configs that never set the field
+	deprecatedIpHeader := c.Auth.IPHeader
+
 	c.Auth = applyAuthDefaults(c.Auth)
+
+	if deprecatedIpHeader != "" {
+		log.Println("config.load(): WARNING auth.ip_header is deprecated, use ip_resolution.<family>.header instead")
+	}
+
+	ipResolution, err := resolveIpResolution(c.IpResolution, c.Auth.IPHeader)
+	if err != nil {
+		log.Fatalln("config.load(): " + err.Error())
+	}
+	c.IpResolution = ipResolution
+
+	// client-asserted resolution weakens the trust model: the address arrives as
+	// a claim rather than something the app observed. Setting url is the opt-in,
+	// so record it in the log rather than behind a config flag.
+	if c.IpResolution.IPv4.Url != "" {
+		log.Println("config.load(): ipv4 uses client-asserted resolution via " + c.IpResolution.IPv4.Url)
+	}
+	if c.IpResolution.IPv6.Url != "" {
+		log.Println("config.load(): ipv6 uses client-asserted resolution via " + c.IpResolution.IPv6.Url)
+	}
 
 	if c.Unifi.Site == "" {
 		c.Unifi.Site = "default"
