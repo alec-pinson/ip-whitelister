@@ -67,6 +67,28 @@ Key top-level options:
 | `unifi`        | UniFi gateway connection + credentials (see [UniFi](#unifi)).       |
 | `resources`    | List of cloud resources to whitelist against (see example config). |
 | `ip_whitelist` | Static, always-applied IPs — for non-human/proxy addresses only.   |
+| `ip_version`   | Per-resource address family: `ipv4` (default), `ipv6`, or `both`. |
+
+### Address families (`ip_version`)
+
+Each entry in `resources` takes an optional `ip_version`:
+
+| Value  | Effect                                              |
+| ------ | --------------------------------------------------- |
+| `ipv4` | Only IPv4 addresses are whitelisted. **Default.**   |
+| `ipv6` | Only IPv6 addresses are whitelisted.                |
+| `both` | Both families are whitelisted.                      |
+
+A user has a single whitelisted IP — whichever family their browser reached the
+app over — so an IPv4 user never appears in an `ipv6` resource, and vice versa.
+To cover both, whitelist against two resources.
+
+**Exception:** `azure` / `frontdoor` defaults to `both`, because it has never
+filtered by address family. Set `ip_version: ipv4` explicitly to restrict it.
+
+Note that not every backing service accepts IPv6 — Azure Key Vault firewall
+rules, for example, are IPv4-only. `ip_version` filters what the app sends; it
+does not check what the service accepts.
 
 ### Secrets via environment variables
 
@@ -140,6 +162,12 @@ resources:
       - <group-object-id>
     ip_whitelist:             # optional: per-list static entries
       - 1.2.3.4/32
+
+  # a UniFi Network List is family-typed, so IPv6 needs its own list
+  - cloud: unifi
+    type: networklist
+    name: ip-whitelister-ipv6
+    ip_version: ipv6
 ```
 
 Setup notes:
