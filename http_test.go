@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"golang.org/x/oauth2"
@@ -399,5 +400,92 @@ func TestResolveHandlerRejectsUnauthenticated(t *testing.T) {
 	httpErr, ok := err.(Error)
 	if !ok || httpErr.Code != http.StatusUnauthorized {
 		t.Errorf("error = %v, want a 401", err)
+	}
+}
+
+func TestPendingProbes(t *testing.T) {
+	defer func() { c.IpResolution = IpResolution{} }()
+
+	c.IpResolution = IpResolution{
+		IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com"},
+		IPv6: IpFamilyResolution{Url: "https://ipv6.icanhazip.com"},
+	}
+
+	// connected over ipv4 => only the ipv6 probe is pending
+	probes := pendingProbes("203.0.113.7")
+	if len(probes) != 1 || probes[0].Family != ipVersionV6 {
+		t.Errorf("pendingProbes(ipv4 client) = %+v, want one ipv6 probe", probes)
+	}
+	if probes[0].Timeout != int(defaultUrlTimeout/time.Millisecond) {
+		t.Errorf("timeout = %d ms, want %d ms", probes[0].Timeout, int(defaultUrlTimeout/time.Millisecond))
+	}
+
+	// connected over ipv6 => only the ipv4 probe is pending
+	probes = pendingProbes("2a00:11c7:1234:b801::1")
+	if len(probes) != 1 || probes[0].Family != ipVersionV4 {
+		t.Errorf("pendingProbes(ipv6 client) = %+v, want one ipv4 probe", probes)
+	}
+
+	// a family with no url is never probed
+	c.IpResolution = IpResolution{IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com"}}
+	if probes := pendingProbes("203.0.113.7"); len(probes) != 0 {
+		t.Errorf("pendingProbes() = %+v, want none", probes)
+	}
+
+	// a disabled family is never probed
+	disabled := false
+	c.IpResolution = IpResolution{
+		IPv6: IpFamilyResolution{Enabled: &disabled, Url: ""},
+		IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com"},
+	}
+	if probes := pendingProbes("2a00:11c7:1234:b801::1"); len(probes) != 1 {
+		t.Errorf("pendingProbes() = %+v, want just the ipv4 probe", probes)
+	}
+}
+
+func TestNoAuthIndexHandlerRendersProbe(t *testing.T) {
+	testRedisInstance := CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	if !r.connect(rc) {
+		t.Fatal("could not connect to test redis")
+	}
+	defer DeleteTestRedis(t, testRedisInstance)
+
+	c.TTL = 24
+	c.IPWhiteList = nil
+	c.Auth.Header = "Cf-Access-Authenticated-User-Email"
+	c.Auth.IPHeader = "Cf-Connecting-Ip"
+	c.IpResolution = IpResolution{
+		IPv4: IpFamilyResolution{Header: "Cf-Connecting-Ip"},
+		IPv6: IpFamilyResolution{Header: "Cf-Connecting-Ip", Url: "https://ipv6.icanhazip.com"},
+	}
+	defer func() {
+		c.Auth.Header = ""
+		c.Auth.IPHeader = ""
+		c.IpResolution = IpResolution{}
+	}()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Cf-Access-Authenticated-User-Email", "dave@example.com")
+	req.Header.Set("Cf-Connecting-Ip", "203.0.113.7")
+	rr := httptest.NewRecorder()
+
+	if err := noAuthIndexHandler(rr, req); err != nil {
+		t.Fatalf("noAuthIndexHandler() unexpected error: %v", err)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "ipv6.icanhazip.com") {
+		t.Errorf("body missing the ipv6 probe url:\n%s", body)
+	}
+	if !strings.Contains(body, "/resolve") {
+		t.Errorf("body missing the /resolve POST:\n%s", body)
+	}
+	// the ipv4 address came from the connection, so it must not be probed for
+	if strings.Contains(body, "ipv4.icanhazip.com") {
+		t.Errorf("body should not probe for the family already observed:\n%s", body)
 	}
 }

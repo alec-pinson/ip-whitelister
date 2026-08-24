@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorilla/sessions"
 	_ "golang.org/x/net/context"
@@ -70,6 +71,22 @@ var indexTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
       });
 {{end}}
     </script>
+{{range .Probes}}
+    <script>
+      (function () {
+        fetch({{.Url}}, {referrerPolicy: 'no-referrer', signal: AbortSignal.timeout({{.Timeout}})})
+          .then(function (res) { return res.ok ? res.text() : Promise.reject(res.status); })
+          .then(function (ip) {
+            return fetch('/resolve', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({family: {{.Family}}, ip: ip.trim()})
+            });
+          })
+          .catch(function (err) { console.log('ip probe failed', err); });
+      })();
+    </script>
+{{end}}
   </body>
 </html>
 `))
@@ -90,6 +107,22 @@ var noAuthTempl = template.Must(template.New("").Parse(`<!DOCTYPE html>
         <i>Note: It can take a few minutes for your whitelisting to become active. Please note that IPv6 cannot be whitelisted on all resources.</i>
       </div>
     </div>
+{{range .Probes}}
+    <script>
+      (function () {
+        fetch({{.Url}}, {referrerPolicy: 'no-referrer', signal: AbortSignal.timeout({{.Timeout}})})
+          .then(function (res) { return res.ok ? res.text() : Promise.reject(res.status); })
+          .then(function (ip) {
+            return fetch('/resolve', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({family: {{.Family}}, ip: ip.trim()})
+            });
+          })
+          .catch(function (err) { console.log('ip probe failed', err); });
+      })();
+    </script>
+{{end}}
   </body>
 </html>
 `))
@@ -197,9 +230,11 @@ func noAuthIndexHandler(w http.ResponseWriter, req *http.Request) error {
 	var data = struct {
 		Name      string
 		IPAddress string
+		Probes    []probe
 	}{
 		Name:      u.name,
 		IPAddress: u.ip,
+		Probes:    pendingProbes(u.ip),
 	}
 	return noAuthTempl.Execute(w, &data)
 }
@@ -274,17 +309,65 @@ func IndexHandler(w http.ResponseWriter, req *http.Request) error {
 		}
 	}
 
+	var probes []probe
+	if token != nil {
+		// before authentication the page only renders a redirect, so there is
+		// nothing to probe for yet
+		probes = pendingProbes(ipAddress)
+	}
+
 	var data = struct {
 		Token     *oauth2.Token
 		AuthURL   string
 		IPAddress string
+		Probes    []probe
 	}{
 		Token:     token,
 		AuthURL:   oauthConfig.AuthCodeURL(SessionState(session), oauth2.AccessTypeOnline),
 		IPAddress: ipAddress,
+		Probes:    probes,
 	}
 
 	return indexTempl.Execute(w, &data)
+}
+
+// probe is one family's browser-side lookup, rendered into the page.
+type probe struct {
+	Family  string
+	Url     string
+	Timeout int // milliseconds, for AbortSignal.timeout()
+}
+
+// pendingProbes returns the lookups the page should run: one per enabled family
+// that has a url configured and was not already satisfied by the connection.
+// The family we observed needs no probe, which also avoids a third-party
+// request for an address we already know.
+func pendingProbes(observed string) []probe {
+	observedType, err := ipVersion(observed)
+	if err != nil {
+		observedType = Undefined
+	}
+
+	var out []probe
+	families := []struct {
+		name string
+		t    IpType
+		fr   IpFamilyResolution
+	}{
+		{ipVersionV4, IpV4, c.IpResolution.IPv4},
+		{ipVersionV6, IpV6, c.IpResolution.IPv6},
+	}
+	for _, f := range families {
+		if !f.fr.isEnabled() || f.fr.Url == "" || f.t == observedType {
+			continue
+		}
+		out = append(out, probe{
+			Family:  f.name,
+			Url:     f.fr.Url,
+			Timeout: int(f.fr.timeout() / time.Millisecond),
+		})
+	}
+	return out
 }
 
 // resolveRequest is a client-asserted address for one family, POSTed by the
