@@ -72,6 +72,34 @@ func getIpList(cidr string) (first string, last string, all []string) {
 	return ret[0], ret[len(ret)-1], ret
 }
 
+// ipRange returns the first and last address of cidr. Bounds are computed with
+// byte-wise mask arithmetic, so it works for IPv4 and IPv6 alike — unlike
+// getIpList, which reads a 16-byte IPv6 mask as a uint32 and returns nonsense.
+// It deliberately does not enumerate the range: an IPv6 /64 holds 1.8e19
+// addresses, and no caller needs the full list. A bare address is its own first
+// and last. An unparseable value returns an error rather than exiting.
+func ipRange(cidr string) (first string, last string, err error) {
+	if !strings.Contains(cidr, "/") {
+		if _, err := ipVersion(cidr); err != nil {
+			return "", "", err
+		}
+		return cidr, cidr, nil
+	}
+
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return "", "", err
+	}
+
+	firstIP := make(net.IP, len(network.IP))
+	lastIP := make(net.IP, len(network.IP))
+	for i := range network.IP {
+		firstIP[i] = network.IP[i] & network.Mask[i]
+		lastIP[i] = network.IP[i] | ^network.Mask[i]
+	}
+	return firstIP.String(), lastIP.String(), nil
+}
+
 // function to check if any of the users groups are in the resources groups list
 func hasGroup(resourceGroups []string, userGroups []string) bool {
 	if resourceGroups == nil {

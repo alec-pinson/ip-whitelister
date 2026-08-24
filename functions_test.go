@@ -53,6 +53,50 @@ func TestGetIpList(t *testing.T) {
 	}
 }
 
+func TestIpRange(t *testing.T) {
+	tests := []struct {
+		cidr         string
+		successFirst string
+		successLast  string
+	}{
+		// IPv4 — same expectations the old getIpList test asserted
+		{"10.0.0.0/31", "10.0.0.0", "10.0.0.1"},
+		{"200.0.0.0/30", "200.0.0.0", "200.0.0.3"},
+		{"10.0.0.1", "10.0.0.1", "10.0.0.1"},
+		{"1.2.3.4/32", "1.2.3.4", "1.2.3.4"},
+		{"10.0.0.0/24", "10.0.0.0", "10.0.0.255"},
+
+		// IPv6 — the family the old implementation silently corrupted
+		{"2a00:11c7:1234:b801::/64", "2a00:11c7:1234:b801::", "2a00:11c7:1234:b801:ffff:ffff:ffff:ffff"},
+		{"2a00:11c7:1234:b801::1/128", "2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1"},
+		{"2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1"},
+	}
+
+	for _, f := range tests {
+		first, last, err := ipRange(f.cidr)
+		if err != nil {
+			t.Errorf("ipRange(%q) returned unexpected error %v", f.cidr, err)
+			continue
+		}
+		if first != f.successFirst {
+			t.Errorf("ipRange(%q) first = %v, want %v", f.cidr, first, f.successFirst)
+		}
+		if last != f.successLast {
+			t.Errorf("ipRange(%q) last = %v, want %v", f.cidr, last, f.successLast)
+		}
+	}
+}
+
+// TestIpRangeInvalid asserts a bad value returns an error rather than calling
+// log.Fatal and taking the process down mid-reconcile, as getIpList did.
+func TestIpRangeInvalid(t *testing.T) {
+	for _, cidr := range []string{"not-an-ip", "10.0.0.0/99", "10.0.0.0/", ""} {
+		if _, _, err := ipRange(cidr); err == nil {
+			t.Errorf("ipRange(%q) should return an error", cidr)
+		}
+	}
+}
+
 func TestHasGroup(t *testing.T) {
 
 	groups := []struct {
