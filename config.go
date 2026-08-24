@@ -48,6 +48,7 @@ type ResourceConfiguration struct {
 	Name           string   `yaml:"name"`
 	IPWhiteList    []string `yaml:"ip_whitelist"`
 	Group          []string `yaml:"group"`
+	IPVersion      string   `yaml:"ip_version"`
 }
 
 var defaultConfigFile = "config/config.yaml"
@@ -96,6 +97,32 @@ func applyDefaults(resources []ResourceConfiguration, d Defaults) {
 			resources[i].ResourceGroup = d.ResourceGroup
 		}
 	}
+}
+
+// resolveIpVersion normalises a resource's ip_version and applies def when it is
+// unset. ok is false for an unsupported value; callers decide how to react.
+func resolveIpVersion(v, def string) (out string, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "":
+		return def, true
+	case ipVersionV4:
+		return ipVersionV4, true
+	case ipVersionV6:
+		return ipVersionV6, true
+	case ipVersionBoth:
+		return ipVersionBoth, true
+	}
+	return "", false
+}
+
+// mustResolveIpVersion resolves a resource's ip_version or exits, matching how
+// config.load() already treats an unsupported cloud or resource type.
+func mustResolveIpVersion(v, def string) string {
+	out, ok := resolveIpVersion(v, def)
+	if !ok {
+		log.Fatalln("config.load(): unsupported ip_version '" + v + "' (expected ipv4, ipv6 or both)")
+	}
+	return out
 }
 
 // applyAuthDefaults fills in auth defaults. When auth is disabled
