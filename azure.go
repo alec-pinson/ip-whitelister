@@ -272,7 +272,11 @@ func (st *AzureStorageAccount) update() int {
 			if hasGroup(st.Group, r.getGroups(key)) {
 				if strings.Contains(ipval, "/31") {
 					// storage account doesnt support /31, have to split both ips
-					first, last, _ := getIpList(ipval)
+					first, last, err := ipRange(ipval)
+					if err != nil {
+						log.Print("azure.AzureStorageAccount.update(): ", err)
+						continue
+					}
 					ipRules = append(ipRules, storage.IPRule{
 						IPAddressOrRange: to.StringPtr(first),
 						Action:           storage.ActionAllow,
@@ -304,7 +308,11 @@ func (st *AzureStorageAccount) update() int {
 			}
 			if strings.Contains(ipval, "/31") {
 				// storage account doesnt support /31, have to split both ips
-				first, last, _ := getIpList(ipval)
+				first, last, err := ipRange(ipval)
+				if err != nil {
+					log.Print("azure.AzureStorageAccount.update(): ", err)
+					continue
+				}
 				ipRules = append(ipRules, storage.IPRule{
 					IPAddressOrRange: to.StringPtr(first),
 					Action:           storage.ActionAllow,
@@ -425,7 +433,11 @@ func (pg *AzurePostgresServer) update() int {
 		if !w.inRange(cidr, pg.IPWhiteList) && matchesIpVersion(pg.IPVersion, cidr) {
 			// ip not within static whitelist range
 			if hasGroup(pg.Group, r.getGroups(key)) {
-				first, last, _ := getIpList(cidr)
+				first, last, err := ipRange(cidr)
+				if err != nil {
+					log.Print("azure.AzurePostgresServer.update(): ", err)
+					continue
+				}
 				newRules[key] = postgresql.FirewallRule{
 					FirewallRuleProperties: &postgresql.FirewallRuleProperties{
 						StartIPAddress: to.StringPtr(first),
@@ -442,7 +454,11 @@ func (pg *AzurePostgresServer) update() int {
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, pg.IPWhiteList...) {
 		if matchesIpVersion(pg.IPVersion, cidr) {
-			first, last, _ := getIpList(cidr)
+			first, last, err := ipRange(cidr)
+			if err != nil {
+				log.Print("azure.AzurePostgresServer.update(): ", err)
+				continue
+			}
 			// reg expression for creating key
 			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 			if err != nil {
@@ -534,7 +550,11 @@ func (rc *AzureRedisCache) update() int {
 		if !w.inRange(cidr, rc.IPWhiteList) && matchesIpVersion(rc.IPVersion, cidr) {
 			// ip not within static whitelist range
 			if hasGroup(rc.Group, r.getGroups(key)) {
-				first, last, _ := getIpList(cidr)
+				first, last, err := ipRange(cidr)
+				if err != nil {
+					log.Print("azure.AzureRedisCache.update(): ", err)
+					continue
+				}
 				newRules[key] = redis.FirewallRule{
 					FirewallRuleProperties: &redis.FirewallRuleProperties{
 						StartIP: to.StringPtr(first),
@@ -551,7 +571,11 @@ func (rc *AzureRedisCache) update() int {
 	// static ip whitelist
 	for _, cidr := range append(c.IPWhiteList, rc.IPWhiteList...) {
 		if matchesIpVersion(rc.IPVersion, cidr) {
-			first, last, _ := getIpList(cidr)
+			first, last, err := ipRange(cidr)
+			if err != nil {
+				log.Print("azure.AzureRedisCache.update(): ", err)
+				continue
+			}
 			// reg expression for creating key
 			reg, err := regexp.Compile("[^a-zA-Z0-9]+")
 			if err != nil {
