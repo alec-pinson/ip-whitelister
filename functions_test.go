@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"testing"
 )
 
@@ -27,28 +26,46 @@ func TestChunkList(t *testing.T) {
 
 }
 
-func TestGetIpList(t *testing.T) {
+func TestIpRange(t *testing.T) {
 	tests := []struct {
 		cidr         string
 		successFirst string
 		successLast  string
-		successAll   []string
 	}{
-		{"10.0.0.0/31", "10.0.0.0", "10.0.0.1", []string{"10.0.0.0", "10.0.0.1"}},
-		{"200.0.0.0/30", "200.0.0.0", "200.0.0.3", []string{"200.0.0.0", "200.0.0.1", "200.0.0.2", "200.0.0.3"}},
-		{"10.0.0.1", "10.0.0.1", "10.0.0.1", []string{"10.0.0.1"}},
+		// IPv4
+		{"10.0.0.0/31", "10.0.0.0", "10.0.0.1"},
+		{"200.0.0.0/30", "200.0.0.0", "200.0.0.3"},
+		{"10.0.0.1", "10.0.0.1", "10.0.0.1"},
+		{"1.2.3.4/32", "1.2.3.4", "1.2.3.4"},
+		{"10.0.0.0/24", "10.0.0.0", "10.0.0.255"},
+
+		// IPv6 — the family the old implementation silently corrupted
+		{"2a00:11c7:1234:b801::/64", "2a00:11c7:1234:b801::", "2a00:11c7:1234:b801:ffff:ffff:ffff:ffff"},
+		{"2a00:11c7:1234:b801::1/128", "2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1"},
+		{"2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1"},
 	}
 
 	for _, f := range tests {
-		first, last, all := getIpList(f.cidr)
+		first, last, err := ipRange(f.cidr)
+		if err != nil {
+			t.Errorf("ipRange(%q) returned unexpected error %v", f.cidr, err)
+			continue
+		}
 		if first != f.successFirst {
-			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, first, f.successFirst)
+			t.Errorf("ipRange(%q) first = %v, want %v", f.cidr, first, f.successFirst)
 		}
 		if last != f.successLast {
-			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, last, f.successLast)
+			t.Errorf("ipRange(%q) last = %v, want %v", f.cidr, last, f.successLast)
 		}
-		if !reflect.DeepEqual(all, f.successAll) {
-			t.Errorf("getIpList for %v was incorrect, got %v, want %v", f, all, f.successAll)
+	}
+}
+
+// TestIpRangeInvalid asserts a bad value returns an error rather than calling
+// log.Fatal and taking the process down mid-reconcile.
+func TestIpRangeInvalid(t *testing.T) {
+	for _, cidr := range []string{"not-an-ip", "10.0.0.0/99", "10.0.0.0/", ""} {
+		if _, _, err := ipRange(cidr); err == nil {
+			t.Errorf("ipRange(%q) should return an error", cidr)
 		}
 	}
 }
@@ -81,24 +98,46 @@ func TestHasGroup(t *testing.T) {
 
 }
 
-func TestIsValidIpOrNetV4(t *testing.T) {
+func TestMatchesIpVersion(t *testing.T) {
 	tests := []struct {
+		want    string
 		ip      string
 		success bool
 	}{
-		{"12.12.12.12/32", true},
-		{"1.2.3.4/32", true},
-		{"1.2.3.4", true},
-		{"1.2.3.0/24", true},
-		{"2a00:11c7:1234:b801:a16e:12af:5e42:1100/32", false},
-		{"2a00:11c7:1234:b801:a16e:12af:5e42:1111", false},
-		{"not-an-ip", false},
+		// an empty want behaves as ipv4, which is the default for every
+		// resource type except Front Door
+		{"", "1.2.3.4", true},
+		{"", "1.2.3.0/24", true},
+		{"", "2a00:11c7:1234:b801::1", false},
+
+		{"ipv4", "1.2.3.4", true},
+		{"ipv4", "1.2.3.4/32", true},
+		{"ipv4", "1.2.3.0/24", true},
+		{"ipv4", "2a00:11c7:1234:b801::1", false},
+		{"ipv4", "2a00:11c7:1234:b801::/64", false},
+
+		{"ipv6", "2a00:11c7:1234:b801::1", true},
+		{"ipv6", "2a00:11c7:1234:b801::1/128", true},
+		{"ipv6", "2a00:11c7:1234:b801::/64", true},
+		{"ipv6", "1.2.3.4", false},
+		{"ipv6", "1.2.3.0/24", false},
+
+		{"both", "1.2.3.4", true},
+		{"both", "2a00:11c7:1234:b801::1", true},
+		{"both", "1.2.3.0/24", true},
+		{"both", "2a00:11c7:1234:b801::/64", true},
+
+		// unparseable input is never a match, whatever the family
+		{"ipv4", "not-an-ip", false},
+		{"ipv6", "not-an-ip", false},
+		{"both", "not-an-ip", false},
+		{"", "not-an-ip", false},
 	}
 
 	for _, f := range tests {
-		success := isValidIpOrNetV4(f.ip)
+		success := matchesIpVersion(f.want, f.ip)
 		if success != f.success {
-			t.Errorf("isValidIpOrNetV4 for %v was incorrect, got %v, want %v", f, success, f.success)
+			t.Errorf("matchesIpVersion(%q, %q) = %v, want %v", f.want, f.ip, success, f.success)
 		}
 	}
 }

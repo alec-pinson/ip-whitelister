@@ -165,6 +165,102 @@ func TestBuildMembersDeduplicates(t *testing.T) {
 	}
 }
 
+// TestUnifiMemberFamilyAware asserts single hosts lose their mask while real
+// subnets keep theirs — including the trap that /32 is a host mask on IPv4 but a
+// large subnet on IPv6.
+func TestUnifiMemberFamilyAware(t *testing.T) {
+	tests := []struct {
+		ip   string
+		want string
+	}{
+		{"1.1.1.1/32", "1.1.1.1"},
+		{"1.1.1.1", "1.1.1.1"},
+		{"85.0.0.0/24", "85.0.0.0/24"},
+		{"2a00:11c7:1234:b801::1/128", "2a00:11c7:1234:b801::1"},
+		{"2a00:11c7:1234:b801::1", "2a00:11c7:1234:b801::1"},
+		{"2a00:11c7:1234:b801::/64", "2a00:11c7:1234:b801::/64"},
+		// /32 on IPv6 is a subnet, not a host — it must survive untouched
+		{"2a00:11c7::/32", "2a00:11c7::/32"},
+		// unparseable input is passed through unchanged
+		{"not-an-ip", "not-an-ip"},
+	}
+
+	for _, f := range tests {
+		if got := unifiMember(f.ip); got != f.want {
+			t.Errorf("unifiMember(%q) = %q, want %q", f.ip, got, f.want)
+		}
+	}
+}
+
+func TestBuildMembersIPv6(t *testing.T) {
+	c.Debug = false
+	c.IPWhiteList = []string{"9.9.9.9/32", "2a00:1111::5/128"} // one of each family
+	getGroups := func(string) []string { return nil }
+	nl := UnifiNetworkList{Name: "v6", Group: nil, IPVersion: ipVersionV6}
+	list := map[string]string{
+		"alice": "1.1.1.1/32",                 // IPv4 -> excluded from a v6 list
+		"bob":   "2a00:2222:3333:4444::1/128", // IPv6 -> included, mask stripped
+	}
+
+	got := nl.buildMembers(list, getGroups)
+
+	want := map[string]bool{
+		"2a00:2222:3333:4444::1": true, // bob, host mask stripped
+		"2a00:1111::5":           true, // static v6 host, mask stripped
+	}
+	if len(got) != len(want) {
+		t.Fatalf("buildMembers = %v, want keys %v", got, want)
+	}
+	for _, m := range got {
+		if !want[m] {
+			t.Errorf("unexpected member %q in %v (v6 list must exclude IPv4)", m, got)
+		}
+	}
+}
+
+func TestBuildMembersBothFamilies(t *testing.T) {
+	c.Debug = false
+	c.IPWhiteList = nil
+	getGroups := func(string) []string { return nil }
+	nl := UnifiNetworkList{Name: "mixed", Group: nil, IPVersion: ipVersionBoth}
+	list := map[string]string{
+		"alice": "1.1.1.1/32",
+		"bob":   "2a00:2222::1/128",
+		"bad":   "not-an-ip",
+	}
+
+	got := nl.buildMembers(list, getGroups)
+
+	want := map[string]bool{"1.1.1.1": true, "2a00:2222::1": true}
+	if len(got) != len(want) {
+		t.Fatalf("buildMembers = %v, want keys %v", got, want)
+	}
+	for _, m := range got {
+		if !want[m] {
+			t.Errorf("unexpected member %q in %v", m, got)
+		}
+	}
+}
+
+// TestBuildMembersDefaultsToIPv4 pins the upgrade guarantee: a list with no
+// ip_version set behaves exactly as it did before this field existed.
+func TestBuildMembersDefaultsToIPv4(t *testing.T) {
+	c.Debug = false
+	c.IPWhiteList = nil
+	getGroups := func(string) []string { return nil }
+	nl := UnifiNetworkList{Name: "legacy", Group: nil} // IPVersion zero value
+	list := map[string]string{
+		"alice": "1.1.1.1/32",
+		"bob":   "2a00:2222::1/128",
+	}
+
+	got := nl.buildMembers(list, getGroups)
+
+	if len(got) != 1 || got[0] != "1.1.1.1" {
+		t.Errorf("buildMembers = %v, want [1.1.1.1] (unset ip_version means ipv4)", got)
+	}
+}
+
 type fakeUnifiClient struct {
 	group       unifiFirewallGroup
 	getErr      error

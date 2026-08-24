@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"errors"
 	"log"
 	"net"
@@ -14,6 +13,13 @@ const (
 	Undefined IpType = iota
 	IpV4
 	IpV6
+)
+
+// Supported values for a resource's ip_version field.
+const (
+	ipVersionV4   = "ipv4"
+	ipVersionV6   = "ipv6"
+	ipVersionBoth = "both"
 )
 
 // function to split an array of strings
@@ -34,35 +40,31 @@ func chunkList(array []string, count int) [][]string {
 	return b
 }
 
-// function to get ips in subnet range
-func getIpList(cidr string) (first string, last string, all []string) {
-	var ret []string
+// ipRange returns the first and last address of cidr. Bounds are computed with
+// byte-wise mask arithmetic, so it works for IPv4 and IPv6 alike. It
+// deliberately does not enumerate the range: an IPv6 /64 holds 1.8e19
+// addresses, and no caller needs the full list. A bare address is its own first
+// and last. An unparseable value returns an error rather than exiting.
+func ipRange(cidr string) (first string, last string, err error) {
 	if !strings.Contains(cidr, "/") {
-		// single ip
-		return cidr, cidr, []string{cidr}
+		if _, err := ipVersion(cidr); err != nil {
+			return "", "", err
+		}
+		return cidr, cidr, nil
 	}
-	// convert string to IPNet struct
-	_, ipv4Net, err := net.ParseCIDR(cidr)
+
+	_, network, err := net.ParseCIDR(cidr)
 	if err != nil {
-		log.Fatal("functions.getIpList():", err)
+		return "", "", err
 	}
 
-	// convert IPNet struct mask and address to uint32
-	// network is BigEndian
-	mask := binary.BigEndian.Uint32(ipv4Net.Mask)
-	start := binary.BigEndian.Uint32(ipv4Net.IP)
-
-	// find the final address
-	finish := (start & mask) | (mask ^ 0xffffffff)
-
-	// loop through addresses as uint32
-	for i := start; i <= finish; i++ {
-		// convert back to net.IP
-		ip := make(net.IP, 4)
-		binary.BigEndian.PutUint32(ip, i)
-		ret = append(ret, ip.String())
+	firstIP := make(net.IP, len(network.IP))
+	lastIP := make(net.IP, len(network.IP))
+	for i := range network.IP {
+		firstIP[i] = network.IP[i] & network.Mask[i]
+		lastIP[i] = network.IP[i] | ^network.Mask[i]
 	}
-	return ret[0], ret[len(ret)-1], ret
+	return firstIP.String(), lastIP.String(), nil
 }
 
 // function to check if any of the users groups are in the resources groups list
@@ -80,10 +82,23 @@ func hasGroup(resourceGroups []string, userGroups []string) bool {
 	return false
 }
 
-// isValidIpOrNetV4 reports whether ip is a parseable IPv4 address or IPv4 CIDR.
-func isValidIpOrNetV4(ip string) bool {
-	ipType, err := ipVersion(ip)
-	return err == nil && ipType == IpV4
+// matchesIpVersion reports whether ip is a parseable address (with or without a
+// netmask) of the address family selected by a resource's ip_version. An empty
+// want means ipv4, which is the default for every resource type except Front
+// Door. Unparseable input never matches.
+func matchesIpVersion(want, ip string) bool {
+	t, err := ipVersion(ip)
+	if err != nil {
+		return false
+	}
+	switch want {
+	case ipVersionV6:
+		return t == IpV6
+	case ipVersionBoth:
+		return true
+	default:
+		return t == IpV4
+	}
 }
 
 // ipVersion returns whether ip (with or without a netmask) is IPv4 or IPv6.

@@ -78,6 +78,72 @@ func TestLoadResourceConfigs(t *testing.T) {
 	}
 }
 
+func TestResolveIpVersion(t *testing.T) {
+	tests := []struct {
+		in     string
+		def    string
+		want   string
+		wantOk bool
+	}{
+		// unset falls back to the per-resource-type default
+		{"", ipVersionV4, ipVersionV4, true},
+		{"", ipVersionBoth, ipVersionBoth, true},
+
+		// explicit values win over the default, and are normalised
+		{"ipv4", ipVersionBoth, ipVersionV4, true},
+		{"ipv6", ipVersionV4, ipVersionV6, true},
+		{"both", ipVersionV4, ipVersionBoth, true},
+		{"IPv6", ipVersionV4, ipVersionV6, true},
+		{"  Both  ", ipVersionV4, ipVersionBoth, true},
+
+		// anything else is rejected
+		{"ipv5", ipVersionV4, "", false},
+		{"v6", ipVersionV4, "", false},
+		{"yes", ipVersionV4, "", false},
+	}
+
+	for _, f := range tests {
+		got, ok := resolveIpVersion(f.in, f.def)
+		if ok != f.wantOk {
+			t.Errorf("resolveIpVersion(%q, %q) ok = %v, want %v", f.in, f.def, ok, f.wantOk)
+			continue
+		}
+		if got != f.want {
+			t.Errorf("resolveIpVersion(%q, %q) = %q, want %q", f.in, f.def, got, f.want)
+		}
+	}
+}
+
+func TestLoadResourceConfigsIpVersion(t *testing.T) {
+	dir := t.TempDir()
+	yaml := "" +
+		"resources:\n" +
+		"  - cloud: unifi\n" +
+		"    type: networklist\n" +
+		"    name: list-v6\n" +
+		"    ip_version: ipv6\n" +
+		"  - cloud: unifi\n" +
+		"    type: networklist\n" +
+		"    name: list-default\n"
+	if err := os.WriteFile(filepath.Join(dir, "app.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resources, err := loadResourceConfigs(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("expected 2 resources, got %d", len(resources))
+	}
+	if resources[0].IPVersion != "ipv6" {
+		t.Errorf("ip_version did not unmarshal, got %q want %q", resources[0].IPVersion, "ipv6")
+	}
+	if resources[1].IPVersion != "" {
+		t.Errorf("omitted ip_version should stay empty, got %q", resources[1].IPVersion)
+	}
+}
+
 func TestApplyDefaults(t *testing.T) {
 	defaults := Defaults{SubscriptionId: "sub-default", ResourceGroup: "rg-default"}
 	resources := []ResourceConfiguration{

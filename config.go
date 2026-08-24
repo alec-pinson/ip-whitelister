@@ -48,6 +48,7 @@ type ResourceConfiguration struct {
 	Name           string   `yaml:"name"`
 	IPWhiteList    []string `yaml:"ip_whitelist"`
 	Group          []string `yaml:"group"`
+	IPVersion      string   `yaml:"ip_version"`
 }
 
 var defaultConfigFile = "config/config.yaml"
@@ -96,6 +97,32 @@ func applyDefaults(resources []ResourceConfiguration, d Defaults) {
 			resources[i].ResourceGroup = d.ResourceGroup
 		}
 	}
+}
+
+// resolveIpVersion normalises a resource's ip_version and applies def when it is
+// unset. ok is false for an unsupported value; callers decide how to react.
+func resolveIpVersion(v, def string) (out string, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "":
+		return def, true
+	case ipVersionV4:
+		return ipVersionV4, true
+	case ipVersionV6:
+		return ipVersionV6, true
+	case ipVersionBoth:
+		return ipVersionBoth, true
+	}
+	return "", false
+}
+
+// mustResolveIpVersion resolves a resource's ip_version or exits, matching how
+// config.load() already treats an unsupported cloud or resource type.
+func mustResolveIpVersion(v, def string) string {
+	out, ok := resolveIpVersion(v, def)
+	if !ok {
+		log.Fatalln("config.load(): unsupported ip_version '" + v + "' (expected ipv4, ipv6 or both)")
+	}
+	return out
 }
 
 // applyAuthDefaults fills in auth defaults. When auth is disabled
@@ -189,6 +216,10 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				fd.PolicyName = resource.PolicyName
 				fd.IPWhiteList = resource.IPWhiteList
 				fd.Group = resource.Group
+				// Front Door has never filtered by address family, so it defaults
+				// to both — an ipv4 default would silently stop whitelisting
+				// existing IPv6 users on upgrade.
+				fd.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionBoth)
 				fd.new(fd)
 			case "storageaccount":
 				var st AzureStorageAccount
@@ -197,6 +228,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				st.Name = resource.Name
 				st.IPWhiteList = resource.IPWhiteList
 				st.Group = resource.Group
+				st.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				st.new(st)
 			case "keyvault":
 				var kv AzureKeyVault
@@ -205,6 +237,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				kv.Name = resource.Name
 				kv.IPWhiteList = resource.IPWhiteList
 				kv.Group = resource.Group
+				kv.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				kv.new(kv)
 			case "postgres":
 				var pg AzurePostgresServer
@@ -213,6 +246,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				pg.Name = resource.Name
 				pg.IPWhiteList = resource.IPWhiteList
 				pg.Group = resource.Group
+				pg.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				pg.new(pg)
 			case "redis":
 				var rc AzureRedisCache
@@ -221,6 +255,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				rc.Name = resource.Name
 				rc.IPWhiteList = resource.IPWhiteList
 				rc.Group = resource.Group
+				rc.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				rc.new(rc)
 			case "cosmosdb":
 				var cd AzureCosmosDb
@@ -229,6 +264,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				cd.Name = resource.Name
 				cd.IPWhiteList = resource.IPWhiteList
 				cd.Group = resource.Group
+				cd.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				cd.new(cd)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")
@@ -240,6 +276,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				nl.Name = resource.Name
 				nl.Group = resource.Group
 				nl.IPWhiteList = resource.IPWhiteList
+				nl.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				nl.client = newUnifiClient(c.Unifi)
 				nl.new(nl)
 			default:
