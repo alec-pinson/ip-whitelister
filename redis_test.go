@@ -290,6 +290,31 @@ func TestGetGroupsMissing(t *testing.T) {
 	DeleteTestRedis(t, testRedisInstance)
 }
 
+func TestGetGroupsIgnoresFamilySuffix(t *testing.T) {
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	if r.connect(rc) {
+		const user = "testuser111111"
+		if !r.addGroups(user, []string{"group1", "group2"}) {
+			t.Fatal("failed to seed groups")
+		}
+
+		// providers read keys straight out of w.List, which now contains
+		// family-suffixed entries; both forms must find the same cached groups
+		if got := r.getGroups(user); len(got) != 2 {
+			t.Errorf("getGroups(%q) = %v, want 2 groups", user, got)
+		}
+		if got := r.getGroups(user + redisKeySuffixV6); len(got) != 2 {
+			t.Errorf("getGroups(%q) = %v, want 2 groups", user+redisKeySuffixV6, got)
+		}
+	}
+
+	DeleteTestRedis(t, testRedisInstance)
+}
+
 func TestGetGroups(t *testing.T) {
 	users := []struct {
 		user    string
