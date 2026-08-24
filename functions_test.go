@@ -32,7 +32,7 @@ func TestIpRange(t *testing.T) {
 		successFirst string
 		successLast  string
 	}{
-		// IPv4 — same expectations the old getIpList test asserted
+		// IPv4
 		{"10.0.0.0/31", "10.0.0.0", "10.0.0.1"},
 		{"200.0.0.0/30", "200.0.0.0", "200.0.0.3"},
 		{"10.0.0.1", "10.0.0.1", "10.0.0.1"},
@@ -61,7 +61,7 @@ func TestIpRange(t *testing.T) {
 }
 
 // TestIpRangeInvalid asserts a bad value returns an error rather than calling
-// log.Fatal and taking the process down mid-reconcile, as getIpList did.
+// log.Fatal and taking the process down mid-reconcile.
 func TestIpRangeInvalid(t *testing.T) {
 	for _, cidr := range []string{"not-an-ip", "10.0.0.0/99", "10.0.0.0/", ""} {
 		if _, _, err := ipRange(cidr); err == nil {
