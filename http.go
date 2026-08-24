@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -180,6 +182,7 @@ func (a *Authentication) initAzure() {
 	http.Handle("/live", handle(livenessHandler))
 	http.Handle("/ready", handle(readinessHandler))
 	http.Handle("/callback", handle(callbackHandler))
+	http.Handle("/resolve", handle(resolveHandler))
 	http.Handle("/", handle(IndexHandler))
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }
@@ -204,6 +207,7 @@ func noAuthIndexHandler(w http.ResponseWriter, req *http.Request) error {
 func (*Authentication) initNoAuth() {
 	http.Handle("/live", handle(livenessHandler))
 	http.Handle("/ready", handle(readinessHandler))
+	http.Handle("/resolve", handle(resolveHandler))
 	http.Handle("/", handle(noAuthIndexHandler))
 	log.Fatal(http.ListenAndServe(":8090", nil))
 }
@@ -241,6 +245,8 @@ func callbackHandler(w http.ResponseWriter, req *http.Request) error {
 	session.Values["token"] = &token
 	session.Values["name"] = &u.name
 	session.Values["ip_address"] = &u.ip
+	// /resolve needs the whitelist key to rebuild the user
+	session.Values["key"] = u.key
 	if err := sessions.Save(req, w); err != nil {
 		return fmt.Errorf("http.callbackHandler(): error saving session: %v", err)
 	}
@@ -279,6 +285,100 @@ func IndexHandler(w http.ResponseWriter, req *http.Request) error {
 	}
 
 	return indexTempl.Execute(w, &data)
+}
+
+// resolveRequest is a client-asserted address for one family, POSTed by the
+// probe JS after it fetches the configured echo url.
+type resolveRequest struct {
+	Family string `json:"family"`
+	Ip     string `json:"ip"`
+}
+
+// resolveUser rebuilds the authenticated user for a /resolve request without
+// setting an address — the caller supplies that from the claim or the
+// connection. Groups are read back from the cache rather than left nil: w.add()
+// writes u.groups to the cache, so a nil slice here would silently drop the
+// user out of every group-scoped resource.
+func resolveUser(req *http.Request) (*User, error) {
+	switch strings.ToLower(c.Auth.Type) {
+	case "none", "disabled":
+		var u User
+		if u.newFromRequest(req) == nil {
+			return nil, Error{Code: http.StatusUnauthorized, Message: "could not determine client identity"}
+		}
+		return &u, nil
+	default:
+		session, _ := store.Get(req, "session")
+		if session.Values["token"] == nil {
+			return nil, Error{Code: http.StatusUnauthorized}
+		}
+		key, _ := session.Values["key"].(string)
+		if key == "" {
+			return nil, Error{Code: http.StatusUnauthorized}
+		}
+		name, _ := session.Values["name"].(string)
+		return &User{key: key, name: name, groups: r.getGroups(key)}, nil
+	}
+}
+
+// resolveHandler accepts a client-asserted address for one family and
+// whitelists it. The address is a claim the app cannot verify, so it is only
+// accepted for a family that has a url configured — otherwise a deployment that
+// never opted into client-asserted resolution would expose an open whitelisting
+// endpoint.
+func resolveHandler(wr http.ResponseWriter, req *http.Request) error {
+	if req.Method != http.MethodPost {
+		return Error{Code: http.StatusMethodNotAllowed}
+	}
+
+	var body resolveRequest
+	if err := json.NewDecoder(io.LimitReader(req.Body, 1024)).Decode(&body); err != nil {
+		return Error{Code: http.StatusBadRequest, Message: "invalid json"}
+	}
+
+	fr, claimed, ok := c.IpResolution.family(body.Family)
+	if !ok {
+		return Error{Code: http.StatusBadRequest, Message: "unknown address family"}
+	}
+	if !fr.isEnabled() {
+		return Error{Code: http.StatusBadRequest, Message: "address family is disabled"}
+	}
+	if fr.Url == "" {
+		return Error{Code: http.StatusBadRequest, Message: "client-asserted resolution is not configured for this family"}
+	}
+
+	u, err := resolveUser(req)
+	if err != nil {
+		return err
+	}
+
+	ip := body.Ip
+	// if this request itself arrived over the claimed family, the address we
+	// observed is strictly better than the one being claimed
+	if observed := observedIp(req); observed != "" {
+		if t, err := ipVersion(observed); err == nil && t == claimed {
+			ip = observed
+		}
+	}
+
+	t, err := ipVersion(ip)
+	if err != nil {
+		return Error{Code: http.StatusBadRequest, Message: "unparseable ip"}
+	}
+	if t != claimed {
+		return Error{Code: http.StatusBadRequest, Message: "ip does not match the claimed address family"}
+	}
+
+	cidr, err := addNetmask(ip)
+	if err != nil {
+		return Error{Code: http.StatusBadRequest, Message: "unparseable ip"}
+	}
+	u.ip = ip
+	u.cidr = cidr
+	u.whitelist()
+
+	wr.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 func livenessHandler(w http.ResponseWriter, req *http.Request) error {
