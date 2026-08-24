@@ -96,26 +96,31 @@ func (u *User) new(client *http.Client, req *http.Request) *User {
 	return u
 }
 
+// observedIp returns the client address as the app sees it: the first
+// ip_resolution header that is present, falling back to RemoteAddr. This is the
+// trusted path — the value is something the app or its proxy observed, not
+// something the client asserted.
+func observedIp(req *http.Request) string {
+	for _, header := range c.IpResolution.headers() {
+		if v := req.Header.Get(header); v != "" {
+			return v
+		}
+	}
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		log.Printf("user.observedIp(): %q is not IP:port\n", req.RemoteAddr)
+		return ""
+	}
+	return ip
+}
+
 // finishUser fills in the request-derived fields shared by both the OAuth and
 // no-auth constructors: the client IP (with a loopback override for local
 // testing), its cidr, and the whitelist key derived from identity. When
 // identity is empty the key falls back to the client IP.
 func (u *User) finishUser(identity string, req *http.Request) error {
-	// get ip from the configured trusted header. Azure Front Door sets
-	// X-Azure-Clientip (the default when ip_header is unset); no-auth mode uses
-	// ip_header (e.g. Cf-Connecting-Ip). Fall back to RemoteAddr when absent.
-	ipHeader := c.Auth.IPHeader
-	if ipHeader == "" {
-		ipHeader = "X-Azure-Clientip"
-	}
-	u.ip = req.Header.Get(ipHeader)
-	if u.ip == "" {
-		var err error
-		u.ip, _, err = net.SplitHostPort(req.RemoteAddr)
-		if err != nil {
-			log.Printf("user.finishUser(): %q is not IP:port\n", req.RemoteAddr)
-		}
-	}
+	// the client IP as observed by the app or its trusted proxy
+	u.ip = observedIp(req)
 
 	// annoying when testing locally, make up an ip :)
 	if u.ip == "::1" {
