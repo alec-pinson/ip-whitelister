@@ -267,6 +267,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				nl.Name = resource.Name
 				nl.Group = resource.Group
 				nl.IPWhiteList = resource.IPWhiteList
+				nl.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				nl.client = newUnifiClient(c.Unifi)
 				nl.new(nl)
 			default:

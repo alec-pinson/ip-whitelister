@@ -24,6 +24,7 @@ type UnifiNetworkList struct {
 	Name        string   // the Network List / firewall group name
 	Group       []string // optional AzureAD group filter
 	IPWhiteList []string // optional per-list static entries
+	IPVersion   string   // ipv4 (default) | ipv6 | both
 	client      unifiClient
 }
 
@@ -219,7 +220,7 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 	}
 	// dynamic whitelist
 	for key, ip := range list {
-		if !w.inRange(ip, nl.IPWhiteList) && isValidIpOrNetV4(ip) {
+		if !w.inRange(ip, nl.IPWhiteList) && matchesIpVersion(nl.IPVersion, ip) {
 			if hasGroup(nl.Group, getGroups(key)) {
 				add(ip)
 			} else if c.Debug {
@@ -229,7 +230,7 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 	}
 	// static whitelist (global + per-list)
 	for _, ip := range append(c.IPWhiteList, nl.IPWhiteList...) {
-		if isValidIpOrNetV4(ip) {
+		if matchesIpVersion(nl.IPVersion, ip) {
 			add(ip)
 		}
 	}
@@ -237,11 +238,21 @@ func (nl *UnifiNetworkList) buildMembers(list map[string]string, getGroups func(
 }
 
 // unifiMember formats an address for a UniFi firewall group. UniFi stores single
-// hosts as bare IPs — its UI rejects a /32 suffix ("enter single host addresses
-// without the subnet mask") — so we strip a /32 while leaving real subnets (e.g.
-// /24) untouched. Matching UniFi's stored form also keeps sameMembers() stable,
-// so an unchanged whitelist doesn't force a PUT on every reconcile.
+// hosts as bare IPs — its UI rejects a host netmask ("enter single host
+// addresses without the subnet mask") — so we strip the single-host mask while
+// leaving real subnets (e.g. /24) untouched. Matching UniFi's stored form also
+// keeps sameMembers() stable, so an unchanged whitelist doesn't force a PUT on
+// every reconcile. The host mask is family-dependent: /32 for IPv4, /128 for
+// IPv6. On IPv6 a /32 is a large subnet and must be preserved, so the family
+// must be resolved before trimming.
 func unifiMember(ip string) string {
+	t, err := ipVersion(ip)
+	if err != nil {
+		return ip
+	}
+	if t == IpV6 {
+		return strings.TrimSuffix(ip, "/128")
+	}
 	return strings.TrimSuffix(ip, "/32")
 }
 
