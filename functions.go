@@ -134,3 +134,24 @@ func addNetmask(ip string) (string, error) {
 func deleteNetmask(ip string) string {
 	return strings.Split(ip, "/")[0]
 }
+
+// redisKeySuffixV6 distinguishes a user's IPv6 whitelist entry from their IPv4
+// one in Redis DB0. IPv4 keeps the bare user key so entries written before
+// dual-stack support need no migration. A user key is [a-z0-9]+ after the regex
+// strip in finishUser, so ':' can never collide with a generated key.
+const redisKeySuffixV6 = ":v6"
+
+// redisKey returns the DB0 key holding this user's address for family t.
+func redisKey(base string, t IpType) string {
+	if t == IpV6 {
+		return base + redisKeySuffixV6
+	}
+	return base
+}
+
+// baseKey strips any family suffix, returning the plain user key used by the
+// groups cache (DB1) and the API throttle (DB2), both of which are per user
+// rather than per address family.
+func baseKey(k string) string {
+	return strings.TrimSuffix(k, redisKeySuffixV6)
+}
