@@ -25,10 +25,12 @@ ip_resolution:
     enabled: true
     header: Cf-Connecting-Ip
     url: https://ipv4.icanhazip.com
+    url_timeout: 5s
   ipv6:
     enabled: true
     header: Cf-Connecting-Ip
     url: https://ipv6.icanhazip.com
+    url_timeout: 5s
 ```
 
 `ip_resolution` governs **what we collect**. The existing per-resource
@@ -102,6 +104,19 @@ alternative that looks reasonable in isolation.
 
 8. **Family-suffixed Redis keys, not a multi-valued record.** See *Storage*.
 
+9. **`url_timeout` is a flat sibling of `url`, not a nested `custom_probe`
+   block.** A nested block would put the value three levels deep
+   (`ip_resolution.ipv4.custom_probe.url`) to group exactly two fields, and
+   would nest one of the two peer strategies (`url`) while leaving the other
+   (`header`) flat, hiding their symmetry. The `url_` prefix carries the
+   coupling, and validation covers the rest. If probe options ever multiply,
+   promoting them into a block is mechanical.
+
+10. **`url_timeout` is per family, not one shared value.** A single
+    `ip_resolution.timeout` would be fewer knobs, and since probes run in
+    parallel and failures never block the page there is little practical reason
+    to differ — but per-family costs nothing and keeps the two blocks uniform.
+
 ## Capture
 
 ### Config schema
@@ -113,17 +128,26 @@ type IpResolution struct {
 }
 
 type IpFamilyResolution struct {
-    Enabled *bool  `yaml:"enabled"` // pointer: unset (=> true) must differ from false
-    Header  string `yaml:"header"`
-    Url     string `yaml:"url"`
+    Enabled    *bool  `yaml:"enabled"` // pointer: unset (=> true) must differ from false
+    Header     string `yaml:"header"`
+    Url        string `yaml:"url"`
+    UrlTimeout string `yaml:"url_timeout"` // duration string; resolved to time.Duration at load
 }
 ```
+
+`UrlTimeout` is a `string` run through `time.ParseDuration`, not a
+`time.Duration` field: **yaml.v2 will not parse `5s` into a `Duration`** — it
+only maps integers, and reads them as nanoseconds. Parsing at load with a fatal
+on unparseable input matches the existing `mustResolveIpVersion` convention.
+Defaults to `5s` when unset.
 
 Validation in `config.load()`, matching the existing fatal-on-unsupported-value
 style:
 
 - both families disabled → fatal (nothing could ever be whitelisted)
 - `url` set on a disabled family → fatal (contradictory)
+- `url_timeout` set without `url` → fatal (contradictory)
+- `url_timeout` not parseable by `time.ParseDuration`, or ≤ 0 → fatal
 - `auth.ip_header` still set → deprecation warning
 
 Omitting the `ip_resolution` block entirely must reproduce today's behaviour
@@ -143,8 +167,9 @@ Layered on top:
 
 5. The template emits probe JS only for families that have a `url` **and** were
    not already satisfied at step 2.
-6. The JS fetches each `url` with a ~5s timeout and
-   `referrerPolicy: 'no-referrer'`.
+6. The JS fetches each `url` with that family's `url_timeout` (default `5s`)
+   and `referrerPolicy: 'no-referrer'`. The resolved timeout is rendered into
+   the page, so the browser enforces it via `AbortSignal.timeout()`.
 7. On success it POSTs `{"family":"ipv6","ip":"2a00:...:1"}` to a new `/resolve`
    endpoint.
 8. `/resolve` re-derives the user exactly as the index handler does — session
@@ -264,7 +289,9 @@ through verbatim.
 
 - **`config_test.go`** — defaults with no block; `*bool` semantics (unset vs
   `false`); fatal when both families disabled; fatal on `url` with a disabled
-  family; `auth.ip_header` fallback and its deprecation warning.
+  family; `url_timeout` parsing, its `5s` default, and fatals on an unparseable
+  value, a non-positive value, and `url_timeout` without `url`;
+  `auth.ip_header` fallback and its deprecation warning.
 - **`redis_test.go`** — per-family keys; independent TTLs; `getGroups`
   normalisation through `baseKey`.
 - **`whitelist_test.go`** — an IPv6 entry does not clobber the same user's IPv4
