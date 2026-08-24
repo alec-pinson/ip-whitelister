@@ -216,6 +216,10 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				fd.PolicyName = resource.PolicyName
 				fd.IPWhiteList = resource.IPWhiteList
 				fd.Group = resource.Group
+				// Front Door has never filtered by address family, so it defaults
+				// to both — an ipv4 default would silently stop whitelisting
+				// existing IPv6 users on upgrade.
+				fd.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionBoth)
 				fd.new(fd)
 			case "storageaccount":
 				var st AzureStorageAccount
@@ -224,6 +228,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				st.Name = resource.Name
 				st.IPWhiteList = resource.IPWhiteList
 				st.Group = resource.Group
+				st.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				st.new(st)
 			case "keyvault":
 				var kv AzureKeyVault
@@ -232,6 +237,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				kv.Name = resource.Name
 				kv.IPWhiteList = resource.IPWhiteList
 				kv.Group = resource.Group
+				kv.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				kv.new(kv)
 			case "postgres":
 				var pg AzurePostgresServer
@@ -240,6 +246,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				pg.Name = resource.Name
 				pg.IPWhiteList = resource.IPWhiteList
 				pg.Group = resource.Group
+				pg.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				pg.new(pg)
 			case "redis":
 				var rc AzureRedisCache
@@ -248,6 +255,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				rc.Name = resource.Name
 				rc.IPWhiteList = resource.IPWhiteList
 				rc.Group = resource.Group
+				rc.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				rc.new(rc)
 			case "cosmosdb":
 				var cd AzureCosmosDb
@@ -256,6 +264,7 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 				cd.Name = resource.Name
 				cd.IPWhiteList = resource.IPWhiteList
 				cd.Group = resource.Group
+				cd.IPVersion = mustResolveIpVersion(resource.IPVersion, ipVersionV4)
 				cd.new(cd)
 			default:
 				log.Fatalln("config.load(): unsupported " + resource.Cloud + " resource type '" + resource.Type + "'")

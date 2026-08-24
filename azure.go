@@ -35,6 +35,7 @@ type AzureFrontDoor struct {
 	PolicyName     string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 }
 
 type AzureStorageAccount struct {
@@ -43,6 +44,7 @@ type AzureStorageAccount struct {
 	Name           string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 }
 
 type AzureKeyVault struct {
@@ -51,6 +53,7 @@ type AzureKeyVault struct {
 	Name           string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 }
 
 type AzurePostgresServer struct {
@@ -59,6 +62,7 @@ type AzurePostgresServer struct {
 	Name           string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 }
 
 type AzureRedisCache struct {
@@ -67,6 +71,7 @@ type AzureRedisCache struct {
 	Name           string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 }
 
 type AzureCosmosDb struct {
@@ -75,6 +80,7 @@ type AzureCosmosDb struct {
 	Name           string
 	IPWhiteList    []string
 	Group          []string
+	IPVersion      string
 	Queued         bool
 }
 
