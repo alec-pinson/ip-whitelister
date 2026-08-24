@@ -4,7 +4,149 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestIsEnabledDefaultsToTrue(t *testing.T) {
+	// the zero value must mean enabled: config.load() is never called in most
+	// tests, and an omitted block must not disable whitelisting
+	if !(IpFamilyResolution{}).isEnabled() {
+		t.Error("zero-value IpFamilyResolution should be enabled")
+	}
+	if !(IpFamilyResolution{Enabled: boolPtr(true)}).isEnabled() {
+		t.Error("explicit true should be enabled")
+	}
+	if (IpFamilyResolution{Enabled: boolPtr(false)}).isEnabled() {
+		t.Error("explicit false should be disabled")
+	}
+}
+
+func TestResolveIpResolutionDefaults(t *testing.T) {
+	got, err := resolveIpResolution(IpResolution{}, "")
+	if err != nil {
+		t.Fatalf("empty block should be valid, got: %v", err)
+	}
+	if !got.IPv4.isEnabled() || !got.IPv6.isEnabled() {
+		t.Error("both families should default to enabled")
+	}
+	if got.IPv4.Header != "X-Azure-Clientip" || got.IPv6.Header != "X-Azure-Clientip" {
+		t.Errorf("headers should default to X-Azure-Clientip, got %q / %q", got.IPv4.Header, got.IPv6.Header)
+	}
+	if got.IPv4.timeout() != defaultUrlTimeout {
+		t.Errorf("timeout = %v, want %v", got.IPv4.timeout(), defaultUrlTimeout)
+	}
+}
+
+func TestResolveIpResolutionDeprecatedAuthHeader(t *testing.T) {
+	// auth.ip_header still fills in for a family that names no header of its own
+	got, err := resolveIpResolution(IpResolution{}, "Cf-Connecting-Ip")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.IPv4.Header != "Cf-Connecting-Ip" || got.IPv6.Header != "Cf-Connecting-Ip" {
+		t.Errorf("auth.ip_header not used as fallback, got %q / %q", got.IPv4.Header, got.IPv6.Header)
+	}
+
+	// an explicit per-family header wins over the deprecated field
+	got, err = resolveIpResolution(IpResolution{IPv4: IpFamilyResolution{Header: "X-Own"}}, "Cf-Connecting-Ip")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.IPv4.Header != "X-Own" {
+		t.Errorf("explicit header should win, got %q", got.IPv4.Header)
+	}
+	if got.IPv6.Header != "Cf-Connecting-Ip" {
+		t.Errorf("other family should still fall back, got %q", got.IPv6.Header)
+	}
+}
+
+func TestResolveIpResolutionTimeout(t *testing.T) {
+	got, err := resolveIpResolution(IpResolution{
+		IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com", UrlTimeout: "2s"},
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.IPv4.timeout() != 2*time.Second {
+		t.Errorf("timeout = %v, want 2s", got.IPv4.timeout())
+	}
+	// a url with no explicit timeout falls back to the default
+	if got.IPv6.timeout() != defaultUrlTimeout {
+		t.Errorf("unset timeout = %v, want %v", got.IPv6.timeout(), defaultUrlTimeout)
+	}
+}
+
+func TestResolveIpResolutionErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		in   IpResolution
+	}{
+		{
+			"both families disabled",
+			IpResolution{
+				IPv4: IpFamilyResolution{Enabled: boolPtr(false)},
+				IPv6: IpFamilyResolution{Enabled: boolPtr(false)},
+			},
+		},
+		{
+			"url on a disabled family",
+			IpResolution{
+				IPv6: IpFamilyResolution{Enabled: boolPtr(false), Url: "https://ipv6.icanhazip.com"},
+			},
+		},
+		{
+			"url_timeout without url",
+			IpResolution{IPv4: IpFamilyResolution{UrlTimeout: "5s"}},
+		},
+		{
+			"unparseable url_timeout",
+			IpResolution{IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com", UrlTimeout: "soon"}},
+		},
+		{
+			"non-positive url_timeout",
+			IpResolution{IPv4: IpFamilyResolution{Url: "https://ipv4.icanhazip.com", UrlTimeout: "0s"}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := resolveIpResolution(tc.in, ""); err == nil {
+				t.Errorf("expected an error for %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestIpResolutionFamily(t *testing.T) {
+	ir := IpResolution{
+		IPv4: IpFamilyResolution{Url: "https://v4.example.com"},
+		IPv6: IpFamilyResolution{Url: "https://v6.example.com"},
+	}
+
+	fr, ipType, ok := ir.family("ipv4")
+	if !ok || ipType != IpV4 || fr.Url != "https://v4.example.com" {
+		t.Errorf("family(ipv4) = %+v, %v, %v", fr, ipType, ok)
+	}
+	// normalised like ip_version is
+	if _, _, ok := ir.family("  IPv6  "); !ok {
+		t.Error("family() should normalise case and whitespace")
+	}
+	if _, _, ok := ir.family("ipv5"); ok {
+		t.Error("family(ipv5) should not be ok")
+	}
+}
+
+func TestIpResolutionEnabledFor(t *testing.T) {
+	ir := IpResolution{IPv6: IpFamilyResolution{Enabled: boolPtr(false)}}
+	if !ir.enabledFor(IpV4) {
+		t.Error("ipv4 should be enabled")
+	}
+	if ir.enabledFor(IpV6) {
+		t.Error("ipv6 should be disabled")
+	}
+}
 
 func TestLoad(t *testing.T) {
 	ret := c.load()
