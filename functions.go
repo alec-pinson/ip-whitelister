@@ -16,6 +16,13 @@ const (
 	IpV6
 )
 
+// Supported values for a resource's ip_version field.
+const (
+	ipVersionV4   = "ipv4"
+	ipVersionV6   = "ipv6"
+	ipVersionBoth = "both"
+)
+
 // function to split an array of strings
 func chunkList(array []string, count int) [][]string {
 	lena := len(array)
@@ -84,6 +91,26 @@ func hasGroup(resourceGroups []string, userGroups []string) bool {
 func isValidIpOrNetV4(ip string) bool {
 	ipType, err := ipVersion(ip)
 	return err == nil && ipType == IpV4
+}
+
+// matchesIpVersion reports whether ip is a parseable address (with or without a
+// netmask) of the address family selected by a resource's ip_version. An empty
+// want means ipv4, which is the default for every resource type except Front
+// Door. Unparseable input never matches, so this fully replaces the
+// isValidIpOrNetV4 guard it supersedes.
+func matchesIpVersion(want, ip string) bool {
+	t, err := ipVersion(ip)
+	if err != nil {
+		return false
+	}
+	switch want {
+	case ipVersionV6:
+		return t == IpV6
+	case ipVersionBoth:
+		return true
+	default:
+		return t == IpV4
+	}
 }
 
 // ipVersion returns whether ip (with or without a netmask) is IPv4 or IPv6.

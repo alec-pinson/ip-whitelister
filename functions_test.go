@@ -103,6 +103,49 @@ func TestIsValidIpOrNetV4(t *testing.T) {
 	}
 }
 
+func TestMatchesIpVersion(t *testing.T) {
+	tests := []struct {
+		want    string
+		ip      string
+		success bool
+	}{
+		// empty want behaves as ipv4, preserving the old isValidIpOrNetV4 default
+		{"", "1.2.3.4", true},
+		{"", "1.2.3.0/24", true},
+		{"", "2a00:11c7:1234:b801::1", false},
+
+		{"ipv4", "1.2.3.4", true},
+		{"ipv4", "1.2.3.4/32", true},
+		{"ipv4", "1.2.3.0/24", true},
+		{"ipv4", "2a00:11c7:1234:b801::1", false},
+		{"ipv4", "2a00:11c7:1234:b801::/64", false},
+
+		{"ipv6", "2a00:11c7:1234:b801::1", true},
+		{"ipv6", "2a00:11c7:1234:b801::1/128", true},
+		{"ipv6", "2a00:11c7:1234:b801::/64", true},
+		{"ipv6", "1.2.3.4", false},
+		{"ipv6", "1.2.3.0/24", false},
+
+		{"both", "1.2.3.4", true},
+		{"both", "2a00:11c7:1234:b801::1", true},
+		{"both", "1.2.3.0/24", true},
+		{"both", "2a00:11c7:1234:b801::/64", true},
+
+		// unparseable input is never a match, whatever the family
+		{"ipv4", "not-an-ip", false},
+		{"ipv6", "not-an-ip", false},
+		{"both", "not-an-ip", false},
+		{"", "not-an-ip", false},
+	}
+
+	for _, f := range tests {
+		success := matchesIpVersion(f.want, f.ip)
+		if success != f.success {
+			t.Errorf("matchesIpVersion(%q, %q) = %v, want %v", f.want, f.ip, success, f.success)
+		}
+	}
+}
+
 func TestIpVersion(t *testing.T) {
 	tests := []struct {
 		ip      string
