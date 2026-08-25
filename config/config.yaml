@@ -8,20 +8,8 @@ url: http://localhost:8080
 # User whitelistings will expire/be removed after 24 hours
 ttl: 24 # hours
 
-# How the app learns a user's address, per family. This controls what we
-# COLLECT; a resource's ip_version controls where we SEND it.
-#
-# Both families default to enabled. Omitting this block entirely reproduces the
-# previous behaviour: whichever family the browser connected over is recorded.
-#
-# header — a trusted client-IP header set by your proxy. The value is something
-#   the app observed, so it cannot be forged by the user.
-# url — a family-pinned echo service fetched BY THE BROWSER, letting a
-#   dual-stack user register both addresses in one visit. The address arrives as
-#   a claim the app cannot verify, so an authenticated user could whitelist an
-#   address they do not control. Setting url is the opt-in to that trade-off.
-# url_timeout — how long the browser may spend on that fetch (default 5s).
-#
+# How a user's address is collected, per family (see README).
+# url is fetched by the browser, so its answer is client-asserted.
 # ip_resolution:
 #   ipv4:
 #     enabled: true
@@ -102,9 +90,8 @@ resources:
     name: ip-whitelister # the UniFi Network List to keep in sync
   # ip_version selects which address family a resource is whitelisted for:
   #   ipv4 (default) | ipv6 | both
-  # A user has one address per family. Without ip_resolution urls configured
-  # they only have whichever family their browser reached the app over, so an
-  # IPv4-only user never appears in an ipv6 resource.
+  # Without an ip_resolution url, a user only has whichever family their
+  # browser reached the app over.
   # Note: azure frontdoor defaults to both, since it has never filtered by family.
   # A UniFi Network List is family-typed, so IPv6 needs its own list.
   - cloud: unifi
