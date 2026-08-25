@@ -179,6 +179,10 @@ func (r RedisConfiguration) setGroupExpiry(user string) bool {
 
 // get groups
 func (r RedisConfiguration) getGroups(user string) []string {
+	// w.List keys carry a family suffix, but the groups cache is per user —
+	// normalising here is what lets every provider stay unchanged.
+	user = baseKey(user)
+
 	var g []string
 
 	redisResponse1 := time.Now()

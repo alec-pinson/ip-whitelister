@@ -279,3 +279,46 @@ func TestUserNewErrorStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestObservedIp(t *testing.T) {
+	defer func() { c.IpResolution = IpResolution{}; c.Auth.IPHeader = "" }()
+
+	// a per-family header is read
+	c.IpResolution = IpResolution{
+		IPv4: IpFamilyResolution{Header: "Cf-Connecting-Ip"},
+		IPv6: IpFamilyResolution{Header: "Cf-Connecting-Ip"},
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Cf-Connecting-Ip", "203.0.113.7")
+	if got := observedIp(req); got != "203.0.113.7" {
+		t.Errorf("observedIp() = %q, want %q", got, "203.0.113.7")
+	}
+
+	// the two families may name different headers; both are tried, ipv4 first
+	c.IpResolution = IpResolution{
+		IPv4: IpFamilyResolution{Header: "X-V4-Ip"},
+		IPv6: IpFamilyResolution{Header: "X-V6-Ip"},
+	}
+	req = httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-V6-Ip", "2a00:11c7:1234:b801::1")
+	if got := observedIp(req); got != "2a00:11c7:1234:b801::1" {
+		t.Errorf("observedIp() = %q, want the ipv6 header value", got)
+	}
+
+	// with no header present, fall back to RemoteAddr
+	c.IpResolution = IpResolution{}
+	req = httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "198.51.100.9:54321"
+	if got := observedIp(req); got != "198.51.100.9" {
+		t.Errorf("observedIp() = %q, want %q", got, "198.51.100.9")
+	}
+
+	// the deprecated auth.ip_header still works when no family names one
+	c.IpResolution = IpResolution{}
+	c.Auth.IPHeader = "X-Legacy-Ip"
+	req = httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Legacy-Ip", "203.0.113.8")
+	if got := observedIp(req); got != "203.0.113.8" {
+		t.Errorf("observedIp() = %q, want %q", got, "203.0.113.8")
+	}
+}

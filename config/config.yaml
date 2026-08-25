@@ -8,6 +8,20 @@ url: http://localhost:8080
 # User whitelistings will expire/be removed after 24 hours
 ttl: 24 # hours
 
+# How a user's address is collected, per family (see README).
+# url is fetched by the browser, so its answer is client-asserted.
+# ip_resolution:
+#   ipv4:
+#     enabled: true
+#     header: Cf-Connecting-Ip
+#     url: https://ipv4.icanhazip.com
+#     url_timeout: 5s
+#   ipv6:
+#     enabled: true
+#     header: Cf-Connecting-Ip
+#     url: https://ipv6.icanhazip.com
+#     url_timeout: 5s
+
 auth:
   type: azure
   tenant_id: notreal-not-real-not-notreal
@@ -73,17 +87,11 @@ resources:
       - 52.187.184.26
   - cloud: unifi
     type: networklist
-    name: ip-whitelister # the UniFi Network List to keep in sync
-  # ip_version selects which address family a resource is whitelisted for:
-  #   ipv4 (default) | ipv6 | both
-  # A user has one IP — whichever family their browser reached the app over — so
-  # an IPv4 user never appears in an ipv6 resource, and vice versa.
-  # Note: azure frontdoor defaults to both, since it has never filtered by family.
-  # A UniFi Network List is family-typed, so IPv6 needs its own list.
+    name: ip-whitelister
   - cloud: unifi
     type: networklist
     name: ip-whitelister-ipv6
-    ip_version: ipv6
+    ip_version: ipv6 # ipv4 (default) | ipv6
 
 # This whitelist will be applied to all resources and should be static non-human IPs only
 ip_whitelist:

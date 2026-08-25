@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v2"
@@ -22,6 +24,8 @@ type Configuration struct {
 	IPWhiteList []string                `yaml:"ip_whitelist"`
 	TTL         int                     `yaml:"ttl"`
 	Unifi       UnifiConfiguration      `yaml:"unifi"`
+	// IpResolution controls which address families are collected and how.
+	IpResolution IpResolution `yaml:"ip_resolution"`
 }
 
 // Defaults are per-config-file fallback values applied to any resource in that
@@ -125,6 +129,140 @@ func mustResolveIpVersion(v, def string) string {
 	return out
 }
 
+// IpResolution describes, per address family, how the app learns a user's
+// address. It governs what we COLLECT; a resource's ip_version governs where we
+// SEND it. The two are orthogonal.
+type IpResolution struct {
+	IPv4 IpFamilyResolution `yaml:"ipv4"`
+	IPv6 IpFamilyResolution `yaml:"ipv6"`
+}
+
+// IpFamilyResolution is one family's settings. Enabled is a pointer because
+// Go's zero value for bool is false, which would make an omitted block
+// indistinguishable from an explicitly disabled one and silently disable
+// whitelisting for every existing config.
+type IpFamilyResolution struct {
+	Enabled    *bool  `yaml:"enabled"`
+	Header     string `yaml:"header"`
+	Url        string `yaml:"url"`
+	UrlTimeout string `yaml:"url_timeout"`
+
+	// resolved from UrlTimeout by resolveIpResolution. yaml.v2 cannot unmarshal
+	// "5s" into a time.Duration — it only maps integers, as nanoseconds — so the
+	// config field stays a string and is parsed here.
+	timeoutDur time.Duration
+}
+
+const defaultUrlTimeout = 5 * time.Second
+const defaultIpHeader = "X-Azure-Clientip"
+
+// isEnabled reports whether this family may be whitelisted. An unset Enabled
+// means true.
+func (f IpFamilyResolution) isEnabled() bool {
+	return f.Enabled == nil || *f.Enabled
+}
+
+// timeout is how long the browser may spend fetching Url.
+func (f IpFamilyResolution) timeout() time.Duration {
+	if f.timeoutDur <= 0 {
+		return defaultUrlTimeout
+	}
+	return f.timeoutDur
+}
+
+// family returns the settings and IpType for a named address family.
+func (ir IpResolution) family(name string) (IpFamilyResolution, IpType, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case ipVersionV4:
+		return ir.IPv4, IpV4, true
+	case ipVersionV6:
+		return ir.IPv6, IpV6, true
+	}
+	return IpFamilyResolution{}, Undefined, false
+}
+
+// enabledFor reports whether addresses of family t may be whitelisted.
+func (ir IpResolution) enabledFor(t IpType) bool {
+	if t == IpV6 {
+		return ir.IPv6.isEnabled()
+	}
+	return ir.IPv4.isEnabled()
+}
+
+// headers returns the distinct client-IP header names to try, ipv4 first. It
+// falls back to the deprecated auth.ip_header and then the Front Door default,
+// so it behaves correctly even when config.load() has not run (as in tests).
+func (ir IpResolution) headers() []string {
+	out := []string{}
+	for _, h := range []string{ir.IPv4.Header, ir.IPv6.Header} {
+		if h == "" {
+			continue
+		}
+		dup := false
+		for _, e := range out {
+			if e == h {
+				dup = true
+			}
+		}
+		if !dup {
+			out = append(out, h)
+		}
+	}
+	if len(out) == 0 {
+		if c.Auth.IPHeader != "" {
+			return []string{c.Auth.IPHeader}
+		}
+		return []string{defaultIpHeader}
+	}
+	return out
+}
+
+// resolveIpResolution validates the ip_resolution block and fills in derived
+// values: the header fallback chain and the parsed url_timeout. authIpHeader is
+// the deprecated auth.ip_header. It returns an error rather than exiting so it
+// can be tested; load() wraps it with a fatal, matching mustResolveIpVersion.
+func resolveIpResolution(ir IpResolution, authIpHeader string) (IpResolution, error) {
+	if !ir.IPv4.isEnabled() && !ir.IPv6.isEnabled() {
+		return ir, errors.New("ip_resolution: both ipv4 and ipv6 are disabled, nothing could ever be whitelisted")
+	}
+
+	families := []struct {
+		name string
+		fr   *IpFamilyResolution
+	}{
+		{ipVersionV4, &ir.IPv4},
+		{ipVersionV6, &ir.IPv6},
+	}
+
+	for _, f := range families {
+		if f.fr.Header == "" {
+			f.fr.Header = authIpHeader
+		}
+		if f.fr.Header == "" {
+			f.fr.Header = defaultIpHeader
+		}
+
+		if f.fr.Url != "" && !f.fr.isEnabled() {
+			return ir, errors.New("ip_resolution." + f.name + ": url is set on a disabled family")
+		}
+		if f.fr.UrlTimeout != "" {
+			if f.fr.Url == "" {
+				return ir, errors.New("ip_resolution." + f.name + ": url_timeout is set without url")
+			}
+			d, err := time.ParseDuration(f.fr.UrlTimeout)
+			if err != nil {
+				return ir, errors.New("ip_resolution." + f.name + ": invalid url_timeout '" + f.fr.UrlTimeout + "'")
+			}
+			if d <= 0 {
+				return ir, errors.New("ip_resolution." + f.name + ": url_timeout must be positive, got '" + f.fr.UrlTimeout + "'")
+			}
+			f.fr.timeoutDur = d
+		}
+	}
+
+	return ir, nil
+}
+
 // applyAuthDefaults fills in auth defaults. When auth is disabled
 // (type none/disabled) and no identity header is configured, it defaults to the
 // header set by Cloudflare Access.
@@ -173,7 +311,31 @@ func (c *Configuration) load(reload ...bool) *Configuration {
 		c.TTL = 24
 	}
 
+	// captured before applyAuthDefaults, which sets IPHeader for auth.type none
+	// — warning afterwards would fire for configs that never set the field
+	deprecatedIpHeader := c.Auth.IPHeader
+
 	c.Auth = applyAuthDefaults(c.Auth)
+
+	if deprecatedIpHeader != "" {
+		log.Println("config.load(): WARNING auth.ip_header is deprecated, use ip_resolution.<family>.header instead")
+	}
+
+	ipResolution, err := resolveIpResolution(c.IpResolution, c.Auth.IPHeader)
+	if err != nil {
+		log.Fatalln("config.load(): " + err.Error())
+	}
+	c.IpResolution = ipResolution
+
+	// client-asserted resolution weakens the trust model: the address arrives as
+	// a claim rather than something the app observed. Setting url is the opt-in,
+	// so record it in the log rather than behind a config flag.
+	if c.IpResolution.IPv4.Url != "" {
+		log.Println("config.load(): ipv4 uses client-asserted resolution via " + c.IpResolution.IPv4.Url)
+	}
+	if c.IpResolution.IPv6.Url != "" {
+		log.Println("config.load(): ipv6 uses client-asserted resolution via " + c.IpResolution.IPv6.Url)
+	}
 
 	if c.Unifi.Site == "" {
 		c.Unifi.Site = "default"

@@ -127,16 +127,60 @@ entry is keyed on the identity the proxy supplies in the configured `header`
 (default `Cf-Access-Authenticated-User-Email`); if that header is absent the
 entry is keyed on the client IP instead.
 
-The client IP is read from the `ip_header` request header (default
-`Cf-Connecting-Ip`, which Cloudflare sets). **Your proxy MUST set this header to
-the real client IP and strip any client-supplied value** — otherwise an
+The client IP is read from the header named by `ip_resolution` (see below).
+`auth.ip_header` is **deprecated** but still honoured as a fallback for any
+family that names no header of its own. **Your proxy MUST set this header to the
+real client IP and strip any client-supplied value** — otherwise an
 authenticated user could spoof it to whitelist an arbitrary address. For Azure
-Front Door use `ip_header: X-Azure-Clientip`.
+Front Door use `X-Azure-Clientip`.
 
 Because AzureAD group membership is unavailable without OAuth, **group-scoped
 resources are skipped** in this mode — only resources without a `group:` filter
 are whitelisted. `tenant_id`, `client_id` and `client_secret` are ignored and
 can be omitted.
+
+### Dual-stack (`ip_resolution`)
+
+A request only reveals the address family the browser connected over, so a
+dual-stack user is normally whitelisted for one family only — in practice IPv6,
+which browsers prefer. `ip_resolution` describes how to learn an address for
+each family:
+
+```yaml
+ip_resolution:
+  ipv4:
+    enabled: true                     # default true
+    header: Cf-Connecting-Ip          # trusted client-IP header
+    url: https://ipv4.icanhazip.com   # optional, see below
+    url_timeout: 5s                   # optional, default 5s
+  ipv6:
+    enabled: true
+    header: Cf-Connecting-Ip
+    url: https://ipv6.icanhazip.com
+    url_timeout: 5s
+```
+
+Omitting the block entirely reproduces the previous behaviour: both families are
+enabled, and whichever family the browser connected over is recorded. Each
+family gets its own Redis entry and its own TTL, so one expiring does not
+disturb the other.
+
+This controls what the app **collects**. A resource's `ip_version` controls
+where it is **sent** — the two are independent, and an IPv6 address still only
+reaches resources configured for `ipv6` or `both`.
+
+**`header` is trusted; `url` is not.** A header value is observed by the app or
+its proxy and cannot be forged. A `url` is a family-pinned echo service fetched
+**by the browser**, whose answer is POSTed back to `/resolve` — so the address
+arrives as a *claim*. An authenticated user can fabricate it and whitelist an
+address they do not control. Setting `url` is the opt-in to that trade-off; the
+app logs which families use it at startup. Where the app can see the address
+itself, the observed value always wins over the claim.
+
+The echo service must send `Access-Control-Allow-Origin` or the browser will
+refuse to read the response; `icanhazip.com` does. Note that it will learn your
+hostname (via the `Origin` header) and the user's IP. No cookies or auth headers
+are sent to it.
 
 ### UniFi
 

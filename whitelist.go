@@ -41,19 +41,32 @@ func (w *Whitelist) add(u *User) bool {
 		return false
 	}
 
+	t, err := ipVersion(u.cidr)
+	if err != nil {
+		log.Printf("whitelist.add(): %v", err)
+		return false
+	}
+	if !c.IpResolution.enabledFor(t) {
+		log.Println("whitelist.add(): ip_resolution is disabled for this address family, skipping " + u.ip)
+		return false
+	}
+	// the groups cache and api throttle stay keyed per user; only the address
+	// itself is stored per family
+	key := redisKey(u.key, t)
+
 	ret := r.addGroups(u.key, u.groups)
 	if !ret {
 		return ret
 	}
 
-	if w.List[u.key] != u.cidr {
+	if w.List[key] != u.cidr {
 		// need to update list
-		if w.List[u.key] == "" {
-			log.Println("whitelist.add(): no current whitelist for '" + u.key + "' was found, adding ip " + u.ip)
+		if w.List[key] == "" {
+			log.Println("whitelist.add(): no current whitelist for '" + key + "' was found, adding ip " + u.ip)
 		} else {
-			log.Println("whitelist.add(): updating whitelist for '" + u.key + "' from " + w.List[u.key] + " to " + u.ip)
+			log.Println("whitelist.add(): updating whitelist for '" + key + "' from " + w.List[key] + " to " + u.ip)
 		}
-		ret = r.addIp(u.key, u.cidr)
+		ret = r.addIp(key, u.cidr)
 		if !ret {
 			return ret
 		}
@@ -62,19 +75,21 @@ func (w *Whitelist) add(u *User) bool {
 		return true
 	} else {
 		// ip already whitelisted ... renew redis expiry time though
-		log.Println("whitelist.add(): no changes required for '" + u.key + "', ip already set to " + u.ip)
+		log.Println("whitelist.add(): no changes required for '" + key + "', ip already set to " + u.ip)
 		if r.canCallApi(u.key) {
 			r.apiCalled(u.key)
 			go w.updateResources()
 		}
-		return r.setIpExpiry(u.key)
+		return r.setIpExpiry(key)
 	}
 }
 
 func (w *Whitelist) delete(u *User) bool {
-	ret := r.deleteIp(u.key)
-	if !ret {
-		return ret
+	// a user may hold one entry per address family
+	for _, t := range []IpType{IpV4, IpV6} {
+		if !r.deleteIp(redisKey(u.key, t)) {
+			return false
+		}
 	}
 	w.updateResources()
 	log.Println("whitelist.delete(): whitelisting for '" + u.key + "' removed.")

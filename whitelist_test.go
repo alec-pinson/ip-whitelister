@@ -121,3 +121,66 @@ func TestInRange(t *testing.T) {
 		}
 	}
 }
+
+func TestAddDualStack(t *testing.T) {
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	defer DeleteTestRedis(t, testRedisInstance)
+
+	c.TTL = 24
+	c.IPWhiteList = nil
+	c.IpResolution = IpResolution{}
+	defer func() { c.IpResolution = IpResolution{} }()
+
+	if !r.connect(rc) {
+		t.Fatal("could not connect to test redis")
+	}
+
+	v4 := &User{key: "dualstackuser", ip: "203.0.113.7", cidr: "203.0.113.7/32"}
+	v6 := &User{key: "dualstackuser", ip: "2a00:11c7:1234:b801::1", cidr: "2a00:11c7:1234:b801::1/128"}
+
+	if !w.add(v4) {
+		t.Fatal("adding the ipv4 address failed")
+	}
+	if !w.add(v6) {
+		t.Fatal("adding the ipv6 address failed")
+	}
+
+	list := r.getWhitelist()
+	if got := list["dualstackuser"]; got != "203.0.113.7/32" {
+		t.Errorf("ipv4 entry = %q, want %q", got, "203.0.113.7/32")
+	}
+	if got := list["dualstackuser"+redisKeySuffixV6]; got != "2a00:11c7:1234:b801::1/128" {
+		t.Errorf("ipv6 entry = %q, want %q", got, "2a00:11c7:1234:b801::1/128")
+	}
+}
+
+func TestAddSkipsDisabledFamily(t *testing.T) {
+	var testRedisInstance = CreateTestRedis(t)
+	var rc RedisConfiguration
+	rc.Host = testRedisInstance.Host
+	rc.Port = testRedisInstance.Port
+	rc.Token = testRedisInstance.Token
+	defer DeleteTestRedis(t, testRedisInstance)
+
+	c.TTL = 24
+	c.IPWhiteList = nil
+	disabled := false
+	c.IpResolution = IpResolution{IPv6: IpFamilyResolution{Enabled: &disabled}}
+	defer func() { c.IpResolution = IpResolution{} }()
+
+	if !r.connect(rc) {
+		t.Fatal("could not connect to test redis")
+	}
+
+	v6 := &User{key: "disabledfamilyuser", ip: "2a00:11c7:1234:b801::2", cidr: "2a00:11c7:1234:b801::2/128"}
+	if w.add(v6) {
+		t.Error("add() should refuse an address whose family is disabled")
+	}
+	if got := r.getWhitelist()["disabledfamilyuser"+redisKeySuffixV6]; got != "" {
+		t.Errorf("disabled family should not be stored, got %q", got)
+	}
+}

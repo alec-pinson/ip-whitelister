@@ -219,3 +219,55 @@ func TestDeleteNetmask(t *testing.T) {
 		}
 	}
 }
+
+func TestRedisKey(t *testing.T) {
+	tests := []struct {
+		base string
+		t    IpType
+		want string
+	}{
+		// ipv4 keeps the bare user key, so existing entries need no migration
+		{"alecpinson123456", IpV4, "alecpinson123456"},
+		{"alecpinson123456", IpV6, "alecpinson123456:v6"},
+		// an unknown family is treated as ipv4 rather than inventing a third key
+		{"alecpinson123456", Undefined, "alecpinson123456"},
+		// auth.type none derives the key from the ip itself; the regex strip in
+		// finishUser leaves only [a-z0-9], so ':' can never collide
+		{"2a001", IpV6, "2a001:v6"},
+	}
+
+	for _, f := range tests {
+		if got := redisKey(f.base, f.t); got != f.want {
+			t.Errorf("redisKey(%q, %v) = %q, want %q", f.base, f.t, got, f.want)
+		}
+	}
+}
+
+func TestBaseKey(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"alecpinson123456", "alecpinson123456"},
+		{"alecpinson123456:v6", "alecpinson123456"},
+		{"2a001:v6", "2a001"},
+		// only a trailing suffix is stripped
+		{"alec:v6user", "alec:v6user"},
+	}
+
+	for _, f := range tests {
+		if got := baseKey(f.in); got != f.want {
+			t.Errorf("baseKey(%q) = %q, want %q", f.in, got, f.want)
+		}
+	}
+}
+
+func TestRedisKeyRoundTrip(t *testing.T) {
+	for _, base := range []string{"alecpinson123456", "2a001", "a"} {
+		for _, ipType := range []IpType{IpV4, IpV6} {
+			if got := baseKey(redisKey(base, ipType)); got != base {
+				t.Errorf("baseKey(redisKey(%q, %v)) = %q, want %q", base, ipType, got, base)
+			}
+		}
+	}
+}
