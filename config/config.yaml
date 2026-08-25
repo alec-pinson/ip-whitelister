@@ -87,17 +87,11 @@ resources:
       - 52.187.184.26
   - cloud: unifi
     type: networklist
-    name: ip-whitelister # the UniFi Network List to keep in sync
-  # ip_version selects which address family a resource is whitelisted for:
-  #   ipv4 (default) | ipv6 | both
-  # Without an ip_resolution url, a user only has whichever family their
-  # browser reached the app over.
-  # Note: azure frontdoor defaults to both, since it has never filtered by family.
-  # A UniFi Network List is family-typed, so IPv6 needs its own list.
+    name: ip-whitelister
   - cloud: unifi
     type: networklist
     name: ip-whitelister-ipv6
-    ip_version: ipv6
+    ip_version: ipv6 # ipv4 (default) | ipv6
 
 # This whitelist will be applied to all resources and should be static non-human IPs only
 ip_whitelist:
